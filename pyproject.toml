@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant-trading-system"
+version = "0.1.0"
+description = "Single-account, long-only, semi-automatic quantitative trading system"
+requires-python = ">=3.12"
+dependencies = [
+  "SQLAlchemy>=2.0,<3.0",
+  "fastapi>=0.128,<1.0",
+  "pydantic>=2.12,<3.0",
+  "streamlit>=1.37,<2.0",
+  "uvicorn>=0.30,<1.0",
+  "psycopg[binary]>=3.2,<4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"

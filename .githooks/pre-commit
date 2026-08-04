@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+python scripts/git_safety_check.py --staged
+python -m compileall -q src scripts
+python -m mypy src/quant_trading_system --exclude 'src[\\/]quant_trading_system[\\/]research[\\/]'
+python -m pytest -q tests/risk tests/execution_ledger tests/api_ui

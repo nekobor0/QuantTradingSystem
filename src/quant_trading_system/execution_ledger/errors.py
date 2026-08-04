@@ -1,0 +1,11 @@
+class LedgerError(Exception): pass
+class InvalidLedgerInput(LedgerError): pass
+class OrderConflict(LedgerError): pass
+class FillConflict(LedgerError): pass
+class Overfill(LedgerError): pass
+class CurrencyMismatch(LedgerError): pass
+class LateFillReview(LedgerError): pass
+class InsufficientBalance(LedgerError): pass
+class ReconciliationConflict(LedgerError): pass
+class NotFound(LedgerError): pass
+class RepositoryConflict(LedgerError): pass

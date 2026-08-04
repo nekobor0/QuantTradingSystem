@@ -1,0 +1,22 @@
+# B7_LIQUIDITY_FRAGILITY 事前登记
+
+- `registration_date`: 2026-08-03；任何B7历史结果计算前登记。
+- `source_lane`: B；`post_v6_hypothesis=true`。
+- `inherited_death`: V6当前Downside Beta及近义窗口永久`REJECTED`；B7不使用下行Beta公式或翻号。
+- `mechanism_delta`: 流动性供给在压力前收缩，价格冲击、成交额萎缩和下跌日波动放大会同时上升；低脆弱股票应在市场下跌时相对抗跌。
+- `role`: `RISK_FILTER`候选；历史最多给`SIGNAL_VALID/RESEARCH_SHADOW`。
+- `historical_evidence_use`: `development_only`；2018-07至2026-06不得称新独立验证。
+- `core_horizon`: 1个月；`primary_benchmark`: 沪深300与中证1000必须同时通过；`variant_count`: 1。
+- `live_confirmation`: 月频append-only至少12个月。
+- `amihud_component`: `log(mean20(|r|/AmountCNY) / mean252(|r|/AmountCNY))`；20日最少15、252日最少120。
+- `amount_contraction_component`: `-log(mean20(AmountCNY) / mean60(AmountCNY))`；20日最少15、60日最少40。
+- `down_vol_amplification_component`: 过去60市场日中市场收益<0时个股复权收益标准差 / 全部个股收益标准差；下跌日最少10、全部最少40。
+- `composite`: 三项在每个信号月1%/99% winsorize、zscore后等权；脆弱性越低越好，防御分数为负复合值；不得挑单项。
+- `pit`: 日线只使用signal_date及以前；TDX Amount万元乘10000为元；市场下跌日由冻结全A等权日收益<0定义。
+- `stage_s`: 对历史PIT行业、log(size)、普通Beta残差化后的下一月下跌市场样本Partial Rank IC>0；正IC月份>55%；原始复合脆弱性与普通Beta月度截面Spearman绝对中位数<0.6。
+- `portfolio`: 对两基准分别使用80%冻结24月回归分数+20%防御分数，现有行业/规模/交易约束构造器，T+1复权开盘；基础5bp并报告10/20bp。
+- `capacity`: 目标1000万元，任一交易<=ADV20 5%。
+- `drawdown_episodes`: 2018-09-28—2019-01-31、2020-02-28—2020-03-31、2022-01-28—2022-10-31、2024-01-31—2024-02-29；两基准各自四段平均改善>=3个百分点。
+- `stage_p`: 两基准均须下跌月相对基线收益>0；down capture下降>=5个百分点；四段平均改善>=3个百分点；全期年化净超额增量>=-1%；TE增量<1.5%；Beta相关<0.6；容量及构造约束通过。
+- `kill`: Stage S任一门槛失败；任一基准Stage P失败；防御改善只来自事后危机期；实时12月未确认。
+- `maximum_variants`: 1；不得改公式、窗口、方向、三项权重、20% tilt、危机期、基准或只保留有利结果。

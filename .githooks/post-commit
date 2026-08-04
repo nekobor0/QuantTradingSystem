@@ -1,0 +1,14 @@
+#!/bin/sh
+
+branch="$(git branch --show-current)"
+case "$branch" in
+  codex/*|feature/*|fix/*|refactor/*)
+    git push -u origin "$branch" || {
+      echo "Automatic push failed; the local commit is preserved."
+      exit 0
+    }
+    ;;
+  *)
+    echo "Automatic push is disabled for branch: $branch"
+    ;;
+esac

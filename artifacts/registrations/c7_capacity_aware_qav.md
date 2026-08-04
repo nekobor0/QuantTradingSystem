@@ -1,0 +1,23 @@
+# C7_CAPACITY_AWARE_QAV 事前登记
+
+- `registration_date`: 2026-08-03；任何C7历史结果计算前登记。
+- `source_lane`: C；`post_v6_hypothesis=true`。
+- `inherited_death`: V6的30股等权、季度排名、单行业6股QAV保持`REJECTED`，不得恢复。
+- `mechanism_delta`: 经济方向仍为`baseline_value_z - max(-baseline_quality_z, 0)`；新增的是事前可投资池和容量感知100股映射，用来识别信号是否只存在于不可交易微盘。
+- `role`: `SLEEVE_ALPHA`候选；历史最多给`SIGNAL_VALID/RESEARCH_SHADOW`。
+- `historical_evidence_use`: `development_only`；2018-07至2026-06不得称为新独立验证。
+- `core_horizon`: 6个月；`primary_benchmark`: 同月同可交易全A等权；`variant_count`: 1。
+- `live_confirmation`: 月频append-only至少12个月。
+- `target_capital`: 10,000,000元；单股目标权重<=2%；买卖交易额<=ADV20的2%。
+- `investable_universe`: 上市>=250日、非ST/退市整理、T+1开盘可交易、过去60个市场交易日至少40日有有效daily_basic记录、ADV20>=10,000,000元；不得按交易所删除。
+- `primary_signal`: 原始QAV，方向越高越好；不得翻号。
+- `diagnostics_only`: 对log(ADV20)残差化的流动性中性QAV、行业内QAV；不得从三种结果挑最好。
+- `partial_ic`: 原始QAV对log(size)、log(ADV20)和历史PIT行业截面残差，与6个月收益做月度Spearman。
+- `portfolio`: 每月取原始QAV前100名；名次100到1线性权重后约束修复，单股<=2%，单行业相对可交易全A等权基准的正主动权重<=5%。
+- `execution`: T月末信号，T+1复权开盘；不可交易持仓保留到可交易。
+- `cost`: 单边换手5bp基础成本；另按每笔参与率使用平方根冲击，2%参与率对应10bp，公式`10bp*sqrt(participation/2%)`。
+- `stage_s_gates`: 6月Partial Rank IC>0.03；IC正向月份>55%；ADV三分层的最高层和中间层IC均>0。
+- `stage_p_gates`: 年化净超额>4%；IR>0.60；最大单股累计主动收益贡献<15%；最低容量>=1000万元且无交易超过2% ADV；最近两个12月完整年度主动收益不得同时为负；所有组合约束通过。
+- `relaxations`: 核心容量不足时仅允许`SLEEVE_ALPHA`；补偿控制为配置<=保守容量25%、组合风险贡献<=10%、2% ADV硬门禁和至少12月实时影子。
+- `kill`: 可投资池Partial IC<=0；去除微盘后净超额消失；收益仍由单股或单一交易所群体主导；实时影子净超额<0。
+- `maximum_variants`: 1；不得改资本、股票数、期限、方向、ADV阈值、有效交易日、成本、行业上限或交易所范围。

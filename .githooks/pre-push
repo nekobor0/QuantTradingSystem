@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+branch="$(git branch --show-current)"
+case "$branch" in
+  main|master)
+    echo "Direct push to $branch is blocked by project policy."
+    exit 1
+    ;;
+esac
+
+python scripts/git_safety_check.py --tracked
+python -m compileall -q src scripts
+python -m mypy src/quant_trading_system --exclude 'src[\\/]quant_trading_system[\\/]research[\\/]'
+python -m pytest -q
+python -m pytest -q tests/risk tests/execution_ledger tests/api_ui

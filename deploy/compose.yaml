@@ -1,0 +1,41 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: qts
+      POSTGRES_USER: qts
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - qts-db:/var/lib/postgresql/data
+    secrets: [db_password]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qts -d qts"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  api:
+    build: {context: .., dockerfile: deploy/Dockerfile}
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      db: {condition: service_healthy}
+    ports: ["127.0.0.1:8000:8000"]
+    secrets: [db_password, session_secret]
+    restart: unless-stopped
+  worker:
+    build: {context: .., dockerfile: deploy/Dockerfile}
+    env_file:
+      - path: .env
+        required: false
+    command: ["python", "-m", "quant_trading_system.platform_operations.worker"]
+    depends_on:
+      db: {condition: service_healthy}
+    secrets: [db_password, session_secret]
+    restart: unless-stopped
+secrets:
+  db_password: {file: ./secrets/db_password.txt}
+  session_secret: {file: ./secrets/session_secret.txt}
+volumes:
+  qts-db:

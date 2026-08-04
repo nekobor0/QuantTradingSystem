@@ -1,0 +1,26 @@
+# F7_CSI1000_INDUSTRY_EARNINGS_DIFFUSION 事前登记
+
+- `registration_date`: 2026-08-03；任何F7历史信号或收益结果计算前登记。
+- `source_lane`: F；`post_v6_hypothesis=true`。
+- `inherited_death`: V6的11月行业相对价格动量构造保持`REJECTED`；F7不得以改窗口恢复该构造。
+- `mechanism_delta`: 用PIT行业盈利改善广度和卖方盈利预测上修度量景气，而非价格趋势；价格动量仅作预登记增量控制。
+- `role`: `BENCHMARK_SPECIFIC`候选；唯一主基准`000852.SH`，不得迁移到沪深300；历史最多给`SIGNAL_VALID/RESEARCH_SHADOW`。
+- `historical_evidence_use`: `development_only`；2016-01至2026-06不得称新独立验证。
+- `core_horizon`: 3个月；`variant_count`: 1；月度更新、三个月重叠持有。
+- `live_confirmation`: 月频append-only至少12个月。
+- `revenue_acceleration`: 最新可见季度`q_sales_yoy`减同公司上一季度`q_sales_yoy`，正值公司占行业有效公司比例。
+- `deducted_profit_acceleration`: 最新可见季度`dt_netprofit_yoy`减同公司上一季度`dt_netprofit_yoy`，正值公司占比；不得以`q_profit_yoy`替代。
+- `roe_improvement`: 最新可见季度`q_roe`减同公司上一季度`q_roe`，正值公司占比；不得以累计`roe`替代。
+- `earnings_revision`: `report_rc`中每机构截至月末最新的下一自然年度Q4预测净利润；公司90日机构中位共识相对上月同一目标年度的`log(consensus_t/consensus_t-1)`。每年1月目标切换记缺失；非正分母记缺失；不得用财报`update_flag`或相邻季度增长替代。
+- `aggregation`: 公司变化先在行业内1%/99% winsorize；前三项为正值占比；预测修订为公告时总市值加权中位数。四项每月跨行业zscore后等权，不得择优或改权。
+- `pit`: `ann_date/report_date<=signal_date`；中证1000成分、申万一级`in_date/out_date`及总市值均按信号月PIT；最终财报版本不得覆盖历史可见值。
+- `coverage`: 核心样本至少60个月、每月>=15个四项均有效行业、每组件有效行业>=80%；前三个财务项在每行业各需>=5家公司且覆盖该行业成分公司数>=50%；卖方项每行业>=5家公司且覆盖当月行业成分市值>=20%。覆盖失败为`DATA_BLOCKED`，不是零值。
+- `forward_industry_return`: 信号月中证1000历史权重在行业内归一，持有未来3个执行月并复利个股`mark_return_1m`；缺失/退市按冻结执行标签处理，不使用期末幸存成分；行业起始权重覆盖<95%的月份记缺失。
+- `stage_s`: 未来3个月行业Rank IC>0.05；正IC月份>55%；控制冻结11月行业价格动量后的增量Partial IC>0；输出HAC t/p、年度、组件和行业贡献但不得挑结果。
+- `portfolio`: 90/10的可执行定义为冻结Lane A持仓加零净资本行业overlay，overlay总行业主动权重绝对值和=10%；复合分数转为截面居中线性rank，缩放并迭代截断至单行业绝对值<=2%、和为0。每月新建一组3月持有cohort，实际tilt为最近3组均值后按同规则重标至10%；行业tilt按当月中证1000行业内基准权重分配到股票；T+1复权开盘。不得改成长短行业数或softmax。
+- `execution_cost`: 基础单边5bp，并报告10/20bp压力；真实停牌、ST、退市、涨跌停和不可交易持仓；不得假设无摩擦换仓。
+- `capacity`: 目标1000万元，任一交易<=ADV20 5%。
+- `stage_p`: 相对Lane A同时满足Delta IR>0.15、年化净超额增量>1%、TE增量<1.5%、主动最大回撤不恶化超过2个百分点、容量和全部权重约束通过、最大行业累计主动收益贡献<30%。
+- `relaxations`: 只允许基准专属性；补偿控制为唯一主基准、固定10% overlay、2%行业主动上限、TE硬门禁和12月实时影子。
+- `kill`: 对价格动量无增量信息；Delta IR<=0；收益由单一行业主导；容量或约束失败；实时12月未确认。
+- `maximum_variants`: 1；不得改期限、基准、四组件、90日共识窗、目标年度、权重、10% overlay、资本、成本或门槛。

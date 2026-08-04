@@ -1,0 +1,21 @@
+# shrunken_icir_v6 事前登记
+
+- `registration_date`: 2026-08-03；首次正式固定验证前登记
+- `lane`: Lane A 指数增强
+- `family`: 带收缩的 ICIR
+- `economic_mechanism`: 五个传统风格的历史 ICIR 估计噪声较大。向等权先验收缩应减少权重误差和单风格集中，同时保留已经实现的风格相对强弱信息。
+- `participants`: 使用公开风格信号进行系统化配置的机构；冲击是近期 IC 均值和波动变化；有限历史使原始 ICIR 过度反应。
+- `direction`: 仅使用非负 ICIR；负值截为0后与等权先验收缩，不允许结果后翻号。
+- `formula`: `lambda=n/(n+60)`；`w=lambda*normalize(max(ICIR,0))+(1-lambda)*equal_weight`；最终再归一化。
+- `prior_months`: 60；事前固定，不搜索。
+- `components`: Value、Quality、Investment、Momentum、Low Residual Volatility。
+- `minimum_history_months`: 24；扩展历史只允许 `exit_date <= signal_date`。
+- `universe`: 冻结 V5 沪深300和中证1000历史成分、PIT行业/ST/上市状态与可交易过滤。
+- `signal_and_execution`: T 月末信号，T+1复权开盘执行，月频。
+- `core_horizon`: 1个月组合收益；不比较其他窗口。
+- `construction`: 冻结 V5 行业内主动换仓，主动比例20%，单股8%，行业30%，规模主动暴露内部20%缓冲。
+- `costs`: 基础5bp；固定压力10bp和20bp。
+- `primary_comparator`: V5 24月滚动回归；另报告五风格等权和历史ICIR。
+- `promotion_gates`: 两基准固定验证年化净超额>2%、IR>0.75、TE<=5%、20bp成本压力净超额>0、1000万元容量和约束通过、单一年份贡献<=累计净超额50%、单一行业贡献<=累计净超额35%，且相对24月回归的净超额和IR均严格改善。
+- `maximum_variants`: 1；不允许搜索先验月数、窗口、方向、主动比例或风格上限。
+- `decision`: 正式运行前未知；未过全部门槛即 `REJECTED`，不得调参或写影子。
