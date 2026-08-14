@@ -18,7 +18,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install ".[research,test]"
+        run: pip install -r requirements-dev.txt
 
       - name: Git safety check (tracked)
         run: python scripts/git_safety_check.py --tracked
@@ -27,7 +27,7 @@ jobs:
         run: python -m compileall -q src scripts
 
       - name: Type check (mypy)
-        run: python -m mypy -p quant_trading_system --exclude 'quant_trading_system[\\/]research[\\/]'
+        run: python -m mypy src/quant_trading_system --exclude 'src[\\/]quant_trading_system[\\/]research[\\/]'
 
       - name: Full test suite
         run: python -m pytest -q
