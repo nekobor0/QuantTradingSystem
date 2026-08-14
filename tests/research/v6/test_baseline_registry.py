@@ -10,9 +10,17 @@ from quant_trading_system.research.v6.baseline_registry import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+FROZEN_BASELINE_ARTIFACT = (
+    PROJECT_ROOT
+    / "artifacts"
+    / "alpha_phase1"
+    / "style_baseline_portfolio_v5_evaluation.json"
+)
 
 
 def test_frozen_v5_registry_recomputes_all_three_baselines():
+    if not FROZEN_BASELINE_ARTIFACT.exists():
+        pytest.skip("frozen V5 baseline artifacts are not present in this checkout")
     snapshot = build_registry_snapshot(
         PROJECT_ROOT,
         PROJECT_ROOT / "development/16-alpha-factor-phase1/GOAL_V6.md",
