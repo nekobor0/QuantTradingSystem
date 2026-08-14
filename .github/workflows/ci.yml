@@ -1,4 +1,4 @@
-﻿name: ci
+name: ci
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install ".[research,test]"
+        run: pip install -e ".[research,test]"
 
       - name: Git safety check (tracked)
         run: python scripts/git_safety_check.py --tracked
