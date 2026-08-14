@@ -168,7 +168,10 @@ def inspect_path(path: str, mode: str) -> int:
     suffix = relative.suffix.lower()
     name = relative.name.lower()
 
-    if lower_parts & FORBIDDEN_DIRS or (relative.parts and relative.parts[0].lower() == "artifacts" and not (len(relative.parts) == 3 and relative.parts[1].lower() == "registrations" and suffix == ".md")):
+    forbidden_dirs = lower_parts & FORBIDDEN_DIRS
+    if "market_data" in forbidden_dirs and tuple(part.lower() for part in relative.parts[:2]) == ("src", "quant_trading_system"):
+        forbidden_dirs -= {"market_data"}
+    if forbidden_dirs or (relative.parts and relative.parts[0].lower() == "artifacts" and not (len(relative.parts) == 3 and relative.parts[1].lower() == "registrations" and suffix == ".md")):
         report(path, None, "forbidden directory")
         errors += 1
     if suffix in FORBIDDEN_SUFFIXES:

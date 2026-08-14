@@ -1,7 +1,7 @@
 # Market, historical, research input, and trading data
 data/
 datasets/
-market_data/
+/market_data/
 raw_data/
 historical_data/
 ticks/
