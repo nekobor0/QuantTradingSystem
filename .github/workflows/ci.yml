@@ -27,7 +27,7 @@ jobs:
         run: python -m compileall -q src scripts
 
       - name: Type check (mypy)
-        run: python -m mypy src/quant_trading_system --exclude 'src[\\/]quant_trading_system[\\/]research[\\/]'
+        run: python -m mypy -p quant_trading_system --exclude 'quant_trading_system[\\/]research[\\/]'
 
       - name: Full test suite
         run: python -m pytest -q
