@@ -1,0 +1,36 @@
+﻿name: ci
+
+on:
+  push:
+    branches: [main, codex/develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install ".[research,test]" httpx pytest-asyncio
+
+      - name: Git safety check (tracked)
+        run: python scripts/git_safety_check.py --tracked
+
+      - name: Syntax check (compileall)
+        run: python -m compileall -q src scripts
+
+      - name: Type check (mypy)
+        run: python -m mypy src/quant_trading_system --exclude 'src[\\/]quant_trading_system[\\/]research[\\/]'
+
+      - name: Full test suite
+        run: python -m pytest -q
+
+      - name: Trading-safety test suite
+        run: python -m pytest -q tests/risk tests/execution_ledger tests/api_ui
