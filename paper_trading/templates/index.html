@@ -1,194 +1,31 @@
-<!DOCTYPE html>
-<html lang="zh">
+<!doctype html>
+<html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<title>模拟仓 Web UI（75% 股息 + 25% 波动率+趋势）</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>75%股息 + 25%波动率模拟仓</title>
 <style>
-  body { font-family: -apple-system, "Microsoft YaHei", sans-serif; margin: 20px; background: #f5f6f8; }
-  h1 { font-size: 20px; margin: 0 0 12px; }
-  .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-  .card { background: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); min-width: 140px; }
-  .card .label { color: #888; font-size: 12px; }
-  .card .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
-  .up { color: #d33; } .down { color: #0a8; }
-  .toolbar { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  button { padding: 8px 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; }
-  button.primary { background: #2a6; color: #fff; border-color: #2a6; }
-  button.active { background: #eef; border-color: #66c; }
-  #chart { width: 100%; height: 420px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  table { border-collapse: collapse; width: 100%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 13px; }
-  th { background: #fafafa; color: #555; }
-  .tag { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-  .buy { background: #fdd; color: #d33; } .sell { background: #dfd; color: #0a8; } .reinvest { background: #eef; color: #66c; }
-  h3 { margin: 20px 0 8px; font-size: 15px; }
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;margin:24px;background:#f5f7fa;color:#1f2937}h1{font-size:22px}.bar,.cards{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.card,section{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px #0001}.card{min-width:150px}.label{font-size:12px;color:#6b7280}.value{font-size:20px;font-weight:650;margin-top:4px}button{padding:8px 14px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;cursor:pointer}button.primary{background:#166534;color:#fff;border-color:#166534}.warn{color:#b45309}.bad{color:#b91c1c}.ok{color:#166534}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px;border-bottom:1px solid #e5e7eb;font-size:13px}pre{white-space:pre-wrap;font-size:12px}section{margin-top:14px}h2{font-size:16px;margin:0 0 10px}
 </style>
 </head>
 <body>
-<h1>模拟仓 Web UI（75% 股息 + 25% 波动率+趋势）</h1>
-
-<div class="cards" id="cards"></div>
-
-<div class="toolbar">
-  <select id="benchmark">
-    <option value="上证指数">上证指数</option>
-    <option value="沪深300">沪深300</option>
-    <option value="">无基准</option>
-  </select>
-  <select id="view">
-    <option value="daily">日度</option>
-    <option value="weekly">周度</option>
-    <option value="monthly">月度</option>
-    <option value="yearly">年度</option>
-  </select>
-  <button class="primary" onclick="runDaily()">执行当日</button>
-  <button onclick="scan()">扫描信号</button>
-  <button onclick="updateData()">更新数据</button>
-  <button onclick="resetState()">重置模拟仓</button>
-  <button id="ddbtn" onclick="toggleDD()">高亮最大回撤</button>
-</div>
-
-<div id="chart"></div>
-
-<h3>调仓信号</h3>
-<div id="signals"><p style="color:#999">尚未扫描。</p></div>
-
+<h1>模拟仓（75% 股息 + 25% 波动率趋势）</h1>
+<p>仅模拟：收盘后生成计划，下一交易日开盘撮合；不连接券商、不提交订单。</p>
+<div class="bar"><button class="primary" onclick="runDaily()">执行当日流程</button><button onclick="scan()">扫描信号</button><button onclick="updateData()">更新数据</button><button onclick="resetState()">重置 v2 模拟仓</button><button onclick="refresh()">刷新</button></div>
+<div id="notice"></div><div class="cards" id="cards"></div>
+<section><h2>待执行计划</h2><div id="plans">—</div></section>
+<section><h2>本次结果 / 扫描</h2><pre id="result">尚未运行。</pre></section>
+<section><h2>最近成交审计</h2><div id="fills">—</div></section>
 <script>
-let chart = echarts.init(document.getElementById('chart'));
-let navData = {dates:[], combined:[], dividend:[], voltrend:[]};
-let benchData = {dates:[], series:{}};
-let showDD = true;
-
-async function loadNav() {
-  const [nav, bench] = await Promise.all([
-    fetch('/api/nav').then(r=>r.json()),
-    fetch('/api/benchmark').then(r=>r.json())
-  ]);
-  navData = nav; benchData = bench;
-  render();
-}
-async function loadState() {
-  const s = await fetch('/api/state').then(r=>r.json());
-  const total = s.total_nav;
-  const ret = total / 1000000 - 1;
-  document.getElementById('cards').innerHTML = `
-    <div class="card"><div class="label">生效交易日</div><div class="value" style="font-size:16px">${s.effective_date||''}</div></div>
-    <div class="card"><div class="label">总净值</div><div class="value">${(total/10000).toFixed(1)}万</div></div>
-    <div class="card"><div class="label">累计收益</div><div class="value ${ret>=0?'up':'down'}">${(ret*100).toFixed(1)}%</div></div>
-    <div class="card"><div class="label">股息分仓净值</div><div class="value">${(s.dividend.nav/10000).toFixed(1)}万</div></div>
-    <div class="card"><div class="label">波动率分仓净值</div><div class="value">${(s.voltrend.nav/10000).toFixed(1)}万</div></div>
-    <div class="card"><div class="label">波动率分仓仓位</div><div class="value">${(s.voltrend.position*100).toFixed(0)}%</div></div>
-  `;
-}
-
-function resample(dates, values, mode) {
-  if (mode === 'daily') return [dates, values];
-  const rule = {weekly:'W', monthly:'ME', yearly:'YE'}[mode];
-  // 简单按末尾取样
-  const idx = {};
-  dates.forEach((d,i)=>{ const p = d.slice(0, mode==='yearly'?4: mode==='monthly'?7: 10); idx[p]=i; });
-  const keys = Object.keys(idx);
-  return [keys, keys.map(k=>values[idx[k]])];
-}
-
-function maxDD(values) {
-  let peak = -Infinity, dd = 0, start = 0, end = 0, curStart = 0;
-  for (let i=0;i<values.length;i++){
-    if (values[i] > peak){ peak = values[i]; curStart = i; }
-    if ((values[i]/peak - 1) < dd){ dd = values[i]/peak - 1; start = curStart; end = i; }
-  }
-  return {dd, start, end};
-}
-
-function render() {
-  const mode = document.getElementById('view').value;
-  const bname = document.getElementById('benchmark').value;
-  const [dates, comb] = resample(navData.dates, navData.combined, mode);
-  const series = [{name:'组合净值', type:'line', data:comb, smooth:true, lineStyle:{width:2}}];
-  // 基准归一化
-  if (bname && benchData.series[bname]) {
-    const b = benchData.series[bname];
-    const b0 = b[0] || 1;
-    const bn = b.map(v => v/b0*100);
-    const bd = benchData.dates.map(d=>d.slice(0,10));
-    const [bd2, bn2] = resample(bd, bn, mode);
-    series.push({name:bname, type:'line', data:bn2, smooth:true, lineStyle:{type:'dashed', width:1}, itemStyle:{color:'#999'}});
-  }
-  // 组合归一化到 100 起点
-  const c0 = comb[0] || 1;
-  const cn = comb.map(v => v/c0*100);
-  series[0].data = cn;
-
-  let option = {
-    tooltip: {trigger:'axis'},
-    legend: {data: series.map(s=>s.name)},
-    grid: {left:50, right:20, top:30, bottom:40},
-    xAxis: {type:'category', data: dates},
-    yAxis: {type:'value', scale:true},
-    series: series,
-  };
-  if (showDD && cn.length > 1) {
-    const {dd, start, end} = maxDD(cn);
-    if (dd < -0.01) {
-      option.series.push({
-        name:'最大回撤区间', type:'line', data: cn.map((v,i)=> i>=start && i<=end ? v : null),
-        lineStyle:{width:6, color:'rgba(220,50,50,.25)'}, itemStyle:{color:'rgba(220,50,50,0)'}, symbol:'none',
-      });
-      option.title = {text:'最大回撤 ' + (dd*100).toFixed(1) + '%', left:'center', textStyle:{fontSize:12, color:'#d33'}};
-    }
-  }
-  chart.setOption(option, true);
-}
-
-async function scan() {
-  const r = await fetch('/api/scan', {method:'POST'}).then(x=>x.json());
-  renderScan(r);
-}
-async function updateData() {
-  const r = await fetch('/api/update_data', {method:'POST'}).then(x=>x.json());
-  alert('数据更新结果：' + JSON.stringify(r));
-  await loadNav(); await loadState();
-}
-async function runDaily() {
-  const r = await fetch('/api/run_daily', {method:'POST'}).then(x=>x.json());
-  renderSignals(r);
-  await loadNav(); await loadState();
-}
-function toggleDD(){ showDD = !showDD; render(); }
-async function resetState() {
-  if (!confirm('确认重置模拟仓？将清空持仓与净值历史。')) return;
-  await fetch('/api/reset', {method:'POST'});
-  await loadNav(); await loadState();
-  document.getElementById('signals').innerHTML = '<p style="color:#999">已重置。</p>';
-}
-function renderSignals(r) {
-  if (r.error) { document.getElementById('signals').innerHTML = '<p style="color:#d33">' + r.error + '</p>'; return; }
-  const d = r.dividend, v = r.voltrend;
-  let html = `<p><b>${r.date}</b>${r.already_executed ? '（同日已执行过，未重复调仓）' : ''} 总净值 ${r.total_nav} ｜ 股息 ${d.nav} ｜ 波动率 ${v.nav}（仓位 ${(v.position*100).toFixed(0)}%）</p><table><tr><th>分仓</th><th>动作</th><th>标的</th><th>金额/股数</th><th>原因</th></tr>`;
-  const tag = {buy:'买入', sell:'卖出', reinvest:'复投'};
-  const dt = (d.trades||[]).map(s => Object.assign({}, s, {book:'股息'}));
-  const vt = (v.trades||[]).map(s => Object.assign({}, s, {book:'波动率'}));
-  for (const s of dt.concat(vt)) {
-    const qty = s.shares ? s.shares + '股' : (s.amount ? s.amount + '元' : '');
-    html += `<tr><td>${s.book}</td><td><span class="tag ${s.action}">${tag[s.action]||s.action}</span></td><td>${s.ts_code||''}</td><td>${qty}</td><td>${s.reason||''}</td></tr>`;
-  }
-  if (!dt.length && !vt.length) html += '<tr><td colspan="5">今日无调仓</td></tr>';
-  html += '</table>';
-  document.getElementById('signals').innerHTML = html;
-}
-function renderScan(r) {
-  const h = [];
-  h.push('<p><b>' + r.date + '</b> 是否月末 ' + (r.is_month_end?'是':'否') + ' ｜ 行情 ' + (r.has_prices?'有':'无') + ' ｜ 股息目标 ' + r.dividend_target_count + ' 只 ｜ 波动率目标 ' + r.voltrend_target_count + ' 只</p>');
-  h.push('<p>当前股息持仓 ' + r.current_dividend_holdings.length + ' 只，波动率持仓 ' + r.current_voltrend_holdings.length + ' 只</p>');
-  h.push('<p><b>股息目标(前20)：</b>' + (r.dividend_target||[]).join('、') + '</p>');
-  h.push('<p><b>波动率目标(前20)：</b>' + (r.voltrend_target||[]).join('、') + '</p>');
-  document.getElementById('signals').innerHTML = h.join('');
-}
-document.getElementById('view').onchange = render;
-document.getElementById('benchmark').onchange = render;
-loadNav(); loadState();
-window.addEventListener('resize', ()=>chart.resize());
+const money=x=>Number(x||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function json(url,options){const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw new Error(JSON.stringify(data));return data}
+function planRow(name,p){if(!p)return `<tr><td>${name}</td><td colspan="4">无</td></tr>`;return `<tr><td>${name}</td><td>${esc(p.signal_date)}</td><td>${esc(p.execute_date)}</td><td>${esc(p.reason)}</td><td>${Object.keys(p.target_weights||{}).length} 只</td></tr>`}
+function renderPlans(s){document.getElementById('plans').innerHTML=`<table><tr><th>分仓</th><th>信号日</th><th>执行日</th><th>原因</th><th>目标数</th></tr>${planRow('股息',s.dividend.pending_plan)}${planRow('波动率',s.voltrend.pending_plan)}</table>`}
+function fillTable(rows){if(!rows.length)return '暂无成交';return `<table><tr><th>日期</th><th>分仓</th><th>方向</th><th>代码</th><th>股数</th><th>价格</th><th>费用</th></tr>${rows.slice(-30).reverse().map(x=>`<tr><td>${esc(x.trade_date)}</td><td>${esc(x.book)}</td><td>${esc(x.side)}</td><td>${esc(x.symbol)}</td><td>${x.shares}</td><td>${money(x.price)}</td><td>${money((x.commission||0)+(x.stamp_duty||0)+(x.dividend_tax||0))}</td></tr>`).join('')}</table>`}
+async function refresh(){try{const [s,a]=await Promise.all([json('/api/state'),json('/api/audit')]);document.getElementById('notice').innerHTML=s.legacy_import?'<p class="bad">检测到旧版合成持仓：执行已硬阻断。请先备份 state.json，再重置 v2 模拟仓；旧两日记录仅作诊断证据。</p>':(s.warnings.length?`<p class="warn">${s.warnings.map(esc).join('；')}</p>`:'<p class="ok">v2 状态可执行</p>');document.getElementById('cards').innerHTML=`<div class="card"><div class="label">有效交易日</div><div class="value">${esc(s.effective_date)}</div></div><div class="card"><div class="label">总净值</div><div class="value">${money(s.total_nav)}</div></div><div class="card"><div class="label">股息分仓</div><div class="value">${money(s.dividend.nav)}</div></div><div class="card"><div class="label">波动率分仓</div><div class="value">${money(s.voltrend.nav)}</div></div><div class="card"><div class="label">风险仓位</div><div class="value">${(100*s.voltrend.position).toFixed(0)}%</div></div>`;renderPlans(s);const rows=[...a.dividend_fills.map(x=>({...x,book:'股息'})),...a.voltrend_fills.map(x=>({...x,book:'波动率'}))];document.getElementById('fills').innerHTML=fillTable(rows)}catch(e){document.getElementById('notice').innerHTML=`<p class="bad">刷新失败：${esc(e.message)}</p>`}}
+async function act(url){try{const r=await json(url,{method:'POST'});document.getElementById('result').textContent=JSON.stringify(r,null,2);await refresh()}catch(e){document.getElementById('result').textContent='失败：'+e.message}}
+function runDaily(){act('/api/run_daily')} function scan(){act('/api/scan')} function updateData(){act('/api/update_data')}
+async function resetState(){if(confirm('确认已备份旧 state.json，并重置为空仓 v2 模拟账户？'))await act('/api/reset')}
+refresh();
 </script>
-</body>
-</html>
+</body></html>

@@ -1,62 +1,99 @@
-"""状态管理：两个分仓的持仓/现金/净值持久化（JSON）。"""
+"""Atomic persistence and migration for the paper-account ledger."""
+
 from __future__ import annotations
+
 import json
-from dataclasses import dataclass, field, asdict
+import os
 from pathlib import Path
+from typing import Any
 
-from config import STATE_FILE, DIV_CAPITAL, VOL_CAPITAL
-
-
-@dataclass
-class Book:
-    name: str
-    cash: float
-    holdings: dict = field(default_factory=dict)   # ts_code -> shares
-    cost: dict = field(default_factory=dict)        # ts_code -> 持仓成本(元)
-    position: float = 1.0                          # 波动率分仓的仓位 0..1
-    nav_history: list = field(default_factory=list) # [{date, nav, ret}]
-
-
-@dataclass
-class State:
-    start_date: str = ""
-    dividend_book: Book = field(default_factory=lambda: Book("股息分仓", DIV_CAPITAL))
-    voltrend_book: Book = field(default_factory=lambda: Book("波动率分仓", VOL_CAPITAL, position=1.0))
-
-    def save(self, path: Path = STATE_FILE):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8")
-
-    @classmethod
-    def load(cls, path: Path = STATE_FILE):
-        if not path.exists():
-            return cls()
-        d = json.loads(path.read_text(encoding="utf-8"))
-        db = Book(**d["dividend_book"])
-        vb = Book(**d["voltrend_book"])
-        db.nav_history = _dedupe_nav(db.nav_history)
-        vb.nav_history = _dedupe_nav(vb.nav_history)
-        return cls(start_date=d.get("start_date", ""), dividend_book=db, voltrend_book=vb)
-
-    @classmethod
-    def reset(cls, path: Path = STATE_FILE):
-        """重置为全新初始状态（现金满额、空持仓、空净值历史）。"""
-        s = cls()
-        s.save(path)
-        return s
+from .config import DIV_CAPITAL, STATE_FILE, VOL_CAPITAL
+from .models import (
+    Book,
+    CashEvent,
+    DividendEntitlement,
+    Fill,
+    Lot,
+    PaperState,
+    PendingPlan,
+)
 
 
-def _dedupe_nav(history):
-    seen, out = set(), []
-    for h in history or []:
-        k = (h.get("date"), h.get("nav"))
-        if k in seen:
-            continue
-        seen.add(k)
-        out.append(h)
-    return out
+def _book_from_dict(data: dict[str, Any], fallback_name: str, fallback_cash: float) -> Book:
+    lots = {
+        symbol: [Lot(**lot) for lot in raw_lots]
+        for symbol, raw_lots in data.get("lots", {}).items()
+    }
+    return Book(
+        name=data.get("name", fallback_name),
+        cash=float(data.get("cash", fallback_cash)),
+        lots=lots,
+        model_weights={k: float(v) for k, v in data.get("model_weights", {}).items()},
+        pending_plan=(PendingPlan(**data["pending_plan"]) if data.get("pending_plan") else None),
+        fills=[Fill(**x) for x in data.get("fills", [])],
+        cash_events=[CashEvent(**x) for x in data.get("cash_events", [])],
+        entitlements=[DividendEntitlement(**x) for x in data.get("entitlements", [])],
+        nav_history=list(data.get("nav_history", [])),
+        last_prices={k: float(v) for k, v in data.get("last_prices", {}).items()},
+        risk_position=float(data.get("risk_position", data.get("position", 1.0))),
+    )
 
 
-def book_nav(book: Book, price_map: dict) -> float:
-    mv = sum(book.holdings.get(c, 0) * price_map.get(c, 0.0) for c in book.holdings)
-    return book.cash + mv
+def _migrate_legacy(data: dict[str, Any]) -> PaperState:
+    """Preserve old observations but mark synthetic legacy holdings as unverified."""
+    start = data.get("start_date") or "UNKNOWN"
+    if isinstance(start, str) and len(start) == 8 and start.isdigit():
+        start = f"{start[:4]}-{start[4:6]}-{start[6:8]}"
+
+    def convert(raw: dict[str, Any], name: str, fallback: float) -> Book:
+        book = _book_from_dict(raw, name, fallback)
+        if not book.lots:
+            for symbol, shares in raw.get("holdings", {}).items():
+                qty = int(shares)
+                if qty > 0:
+                    book.lots[symbol] = [Lot.new(qty, start, 0.0)]
+        return book
+
+    return PaperState(
+        start_date=start,
+        dividend_book=convert(data.get("dividend_book", {}), "dividend", DIV_CAPITAL),
+        voltrend_book=convert(data.get("voltrend_book", {}), "voltrend", VOL_CAPITAL),
+        run_history=list(data.get("run_history", [])),
+        reconciliations=list(data.get("reconciliations", [])),
+        legacy_import=True,
+    )
+
+
+class StateRepository:
+    def __init__(self, path: Path = STATE_FILE):
+        self.path = path
+
+    def load(self) -> PaperState:
+        if not self.path.exists():
+            return PaperState()
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        if int(data.get("version", 1)) < 2:
+            return _migrate_legacy(data)
+        return PaperState(
+            version=2,
+            start_date=data.get("start_date", ""),
+            dividend_book=_book_from_dict(data.get("dividend_book", {}), "dividend", DIV_CAPITAL),
+            voltrend_book=_book_from_dict(data.get("voltrend_book", {}), "voltrend", VOL_CAPITAL),
+            run_history=list(data.get("run_history", [])),
+            reconciliations=list(data.get("reconciliations", [])),
+            legacy_import=bool(data.get("legacy_import", False)),
+        )
+
+    def save(self, state: PaperState) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp.write_text(
+            json.dumps(state.to_dict(), ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        os.replace(tmp, self.path)
+
+    def reset(self) -> PaperState:
+        state = PaperState()
+        self.save(state)
+        return state

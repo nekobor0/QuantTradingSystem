@@ -1,26 +1,38 @@
-"""模拟仓 Web UI 后端（FastAPI）。"""
-from __future__ import annotations
-import pandas as pd
+"""Local paper-account Web API. It contains no broker/order-submission adapter."""
 
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pandas as pd
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from config import BASE_DIR, DATA_DIR, PRINCIPAL, BENCHMARKS
-from state import State, book_nav
-from data_update import update_all, latest_quote_date
-import strategies as st
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-app = FastAPI(title="模拟仓 Web UI")
+from paper_trading.config import BASE_DIR, BENCHMARKS, DATA_DIR, PRINCIPAL
+from paper_trading.data_update import update_all
+from paper_trading.execution import book_nav, run_day
+from paper_trading.market import DataStore
+from paper_trading.state import StateRepository
+from paper_trading.strategies import scan
+
+app = FastAPI(title="模拟仓 Web UI", version="2")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+repository = StateRepository()
+store = DataStore()
 
 
 def _today() -> str:
     return pd.Timestamp.today().strftime("%Y%m%d")
 
 
-def _eff() -> str:
-    return latest_quote_date() or _today()
+def _effective_date() -> str:
+    calendar = store.calendar()
+    return calendar[-1].strftime("%Y-%m-%d") if len(calendar) else pd.Timestamp.today().strftime("%Y-%m-%d")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -30,84 +42,110 @@ def index(request: Request):
 
 @app.get("/api/state")
 def api_state():
-    s = State.load()
-    td = _eff()
-    q = st.load_prices(td) or {}
-    div_nav = book_nav(s.dividend_book, q)
-    vol_nav = book_nav(s.voltrend_book, q)
+    state = repository.load()
+    trade_date = _effective_date()
+    prices = store.prices(trade_date, "close")
+    dividend_nav, dividend_warnings = book_nav(state.dividend_book, prices)
+    voltrend_nav, voltrend_warnings = book_nav(state.voltrend_book, prices)
     return {
-        "start_date": s.start_date or "",
-        "effective_date": td,
+        "version": state.version,
+        "legacy_import": state.legacy_import,
+        "start_date": state.start_date,
+        "effective_date": trade_date,
         "principal": PRINCIPAL,
-        "dividend": {"cash": round(s.dividend_book.cash, 2), "nav": round(div_nav, 2),
-                     "holdings": s.dividend_book.holdings},
-        "voltrend": {"cash": round(s.voltrend_book.cash, 2), "nav": round(vol_nav, 2),
-                     "position": s.voltrend_book.position, "holdings": s.voltrend_book.holdings},
-        "total_nav": round(div_nav + vol_nav, 2),
+        "dividend": {
+            "cash": round(state.dividend_book.cash, 2),
+            "nav": round(dividend_nav, 2),
+            "holdings": state.dividend_book.holdings,
+            "pending_plan": state.dividend_book.pending_plan,
+        },
+        "voltrend": {
+            "cash": round(state.voltrend_book.cash, 2),
+            "nav": round(voltrend_nav, 2),
+            "position": state.voltrend_book.risk_position,
+            "holdings": state.voltrend_book.holdings,
+            "pending_plan": state.voltrend_book.pending_plan,
+        },
+        "total_nav": round(dividend_nav + voltrend_nav, 2),
+        "warnings": dividend_warnings + voltrend_warnings,
     }
 
 
 @app.get("/api/nav")
 def api_nav():
-    s = State.load()
-    dh = s.dividend_book.nav_history
-    vh = s.voltrend_book.nav_history
-    dates = [h["date"] for h in dh] if dh else []
-    div = [h["nav"] for h in dh] if dh else []
-    volt = [h["nav"] for h in vh] if vh else []
-    comb = [d + v for d, v in zip(div, volt)] if len(div) == len(volt) else []
-    return {"dates": dates, "dividend": div, "voltrend": volt, "combined": comb}
+    state = repository.load()
+    dividend = state.dividend_book.nav_history
+    voltrend = state.voltrend_book.nav_history
+    dates = [row["date"] for row in dividend]
+    return {
+        "dates": dates,
+        "dividend": [row["nav"] for row in dividend],
+        "voltrend": [row["nav"] for row in voltrend],
+        "combined": [a["nav"] + b["nav"] for a, b in zip(dividend, voltrend)],
+    }
+
+
+@app.get("/api/audit")
+def api_audit():
+    state = repository.load()
+    return {
+        "runs": state.run_history[-60:],
+        "dividend_fills": [fill.__dict__ for fill in state.dividend_book.fills[-500:]],
+        "voltrend_fills": [fill.__dict__ for fill in state.voltrend_book.fills[-500:]],
+        "dividend_cash_events": [event.__dict__ for event in state.dividend_book.cash_events[-200:]],
+        "voltrend_cash_events": [event.__dict__ for event in state.voltrend_book.cash_events[-200:]],
+    }
 
 
 @app.get("/api/benchmark")
 def api_benchmark():
-    p = DATA_DIR / "benchmark.parquet"
-    if not p.exists():
+    path = DATA_DIR / "benchmark.parquet"
+    if not path.exists():
         return {"dates": [], "series": {}}
-    b = pd.read_parquet(p)
-    b["trade_date"] = pd.to_datetime(b["trade_date"].astype(str))
-    b = b.sort_values("trade_date")
-    out = {"dates": [d.strftime("%Y-%m-%d") for d in b["trade_date"].unique()], "series": {}}
-    for name in BENCHMARKS:
-        sub = b[b["name"] == name]
-        out["series"][name] = list(sub["close"])
-    return out
+    frame = pd.read_parquet(path)
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"].astype(str))
+    frame = frame.sort_values("trade_date")
+    dates = sorted(frame["trade_date"].unique())
+    return {
+        "dates": [pd.Timestamp(value).strftime("%Y-%m-%d") for value in dates],
+        "series": {
+            name: frame[frame["name"].eq(name)].sort_values("trade_date")["close"].tolist()
+            for name in BENCHMARKS
+        },
+    }
 
 
 @app.post("/api/update_data")
 def api_update_data(trade_date: str | None = None):
-    td = trade_date or _today()
-    return update_all(td)
+    return update_all(trade_date or _today())
 
 
 @app.post("/api/scan")
 def api_scan(trade_date: str | None = None):
-    td = trade_date or _eff()
-    s = State.load()
-    return st.scan(s, td)
+    state = repository.load()
+    return scan(state, store, trade_date or _effective_date())
 
 
 @app.post("/api/run_daily")
-def api_run_daily(trade_date: str | None = None):
-    td = trade_date or _today()
-    upd = update_all(td)
-    eff = upd.get("effective_date", td)
-    s = State.load()
-    r = st.execute_daily(s, eff)
-    if "error" not in r:
-        if not s.start_date:
-            s.start_date = eff
-        s.save()
-    r["data_update"] = upd
-    return r
+def api_run_daily(trade_date: str | None = None, update_data: bool = True):
+    update = update_all(trade_date or _today()) if update_data else None
+    effective = update["effective_date"] if update else (trade_date or _effective_date())
+    effective = pd.Timestamp(effective).strftime("%Y-%m-%d")
+    state = repository.load()
+    result = run_day(state, store, effective)
+    if result.get("status") == "COMPLETE":
+        repository.save(state)
+    result["data_update"] = update
+    return result
 
 
 @app.post("/api/reset")
 def api_reset():
-    State.reset()
+    repository.reset()
     return {"ok": True}
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=8000)
