@@ -23,7 +23,16 @@ from .config import (
     stamp_duty_rate,
 )
 from .market import DataStore, balanced_weights, dividend_weights
-from .models import Book, CashEvent, DividendEntitlement, Fill, Lot, PaperState, PendingPlan
+from .models import (
+    Book,
+    CashEvent,
+    DividendEntitlement,
+    Fill,
+    Lot,
+    PaperState,
+    PendingPlan,
+    StrategyAccount,
+)
 
 
 def book_nav(book: Book, prices: dict[str, float]) -> tuple[float, list[str]]:
@@ -218,13 +227,98 @@ def _queue_plan(book: Book, signal_date: str, execute_date: str | None, target_w
     return []
 
 
-def _composite_drawdown(state: PaperState) -> float:
-    div = state.dividend_book.nav_history
-    vol = state.voltrend_book.nav_history
+def _strategy_drawdown(strategy: StrategyAccount) -> float:
+    div = strategy.dividend_book.nav_history
+    vol = strategy.voltrend_book.nav_history
     if not div or not vol:
         return 0.0
     navs = [float(a["nav"]) + float(b["nav"]) for a, b in zip(div, vol)]
     return navs[-1] / max(navs) - 1.0 if max(navs) else 0.0
+
+
+def _run_strategy_day(
+    strategy: StrategyAccount,
+    trade_date: str,
+    open_prices: dict[str, float],
+    close_prices: dict[str, float],
+    actions: pd.DataFrame,
+    next_day: str | None,
+    month_end: bool,
+    dividend_targets: dict[str, float],
+    voltrend_targets: dict[str, float],
+) -> dict:
+    dividend_book = strategy.dividend_book
+    voltrend_book = strategy.voltrend_book
+    div_exec = execute_pending_plan(dividend_book, trade_date, open_prices)
+    vol_exec = execute_pending_plan(voltrend_book, trade_date, open_prices)
+    div_reinvest, div_warnings = process_dividends(dividend_book, trade_date, actions)
+    _, vol_div_warnings = process_dividends(voltrend_book, trade_date, actions)
+    div_nav, div_mark_warnings = _record_nav(dividend_book, trade_date, close_prices)
+    vol_nav, vol_mark_warnings = _record_nav(voltrend_book, trade_date, close_prices)
+    warnings = div_warnings + vol_div_warnings + div_mark_warnings + vol_mark_warnings
+    first_div_signal = not dividend_book.model_weights
+    if first_div_signal or month_end:
+        if dividend_targets:
+            dividend_book.model_weights = dividend_targets
+            warnings += _queue_plan(
+                dividend_book, trade_date, next_day, dividend_targets, "MONTHLY_DIVIDEND"
+            )
+        else:
+            warnings.append("empty_dividend_universe")
+    elif div_reinvest:
+        warnings += _queue_plan(
+            dividend_book,
+            trade_date,
+            next_day,
+            {},
+            "DIVIDEND_REINVEST_SAME_STOCK",
+            div_reinvest,
+        )
+    first_vol_signal = not voltrend_book.model_weights
+    if first_vol_signal or month_end:
+        if voltrend_targets:
+            voltrend_book.model_weights = voltrend_targets
+        else:
+            warnings.append("empty_voltrend_universe")
+    position = voltrend_target_position(voltrend_book, vol_nav, trade_date)
+    drawdown = _strategy_drawdown(strategy)
+    risk_status = "NORMAL"
+    if drawdown <= RISK_HARD_DRAWDOWN and RISK_HARD_ACTION == "VOL_TO_CASH":
+        position = 0.0
+        risk_status = "HARD_VOL_TO_CASH"
+    elif drawdown <= RISK_ALERT_DRAWDOWN:
+        risk_status = "ALERT"
+    position_delta = position - voltrend_book.risk_position
+    position_refresh_due = VOLTREND_POSITION_FREQUENCY == "daily" or month_end or first_vol_signal
+    position_rebalance_due = position_refresh_due and abs(position_delta) >= POSITION_REBALANCE_THRESHOLD
+    voltrend_rebalance_due = first_vol_signal or month_end or position_rebalance_due
+    if voltrend_book.model_weights and voltrend_rebalance_due:
+        voltrend_book.risk_position = position
+        targets = {
+            symbol: weight * position for symbol, weight in voltrend_book.model_weights.items()
+        }
+        warnings += _queue_plan(
+            voltrend_book, trade_date, next_day, targets, "VOL_TARGET_TREND"
+        )
+    return {
+        "key": strategy.key,
+        "name": strategy.name,
+        "dividend_weight": strategy.dividend_weight,
+        "voltrend_weight": strategy.voltrend_weight,
+        "dividend_nav": round(div_nav, 2),
+        "voltrend_nav": round(vol_nav, 2),
+        "total_nav": round(div_nav + vol_nav, 2),
+        "drawdown": round(drawdown, 6),
+        "risk_status": risk_status,
+        "dividend_execution": div_exec,
+        "voltrend_execution": vol_exec,
+        "voltrend_position_signal": {
+            "target": position,
+            "delta": round(position_delta, 4),
+            "rebalance_due": position_rebalance_due,
+        },
+        "warnings": sorted(set(warnings)),
+    }
 
 
 def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
@@ -239,51 +333,33 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
     close_prices = store.prices(trade_date, "close")
     if not open_prices or not close_prices:
         return {"date": trade_date, "status": "BLOCKED", "errors": ["missing_open_or_close_prices"]}
-    div_exec = execute_pending_plan(state.dividend_book, trade_date, open_prices)
-    vol_exec = execute_pending_plan(state.voltrend_book, trade_date, open_prices)
     actions = store.corporate_actions()
-    div_reinvest, div_warnings = process_dividends(state.dividend_book, trade_date, actions)
-    _, vol_div_warnings = process_dividends(state.voltrend_book, trade_date, actions)
-    div_nav, div_mark_warnings = _record_nav(state.dividend_book, trade_date, close_prices)
-    vol_nav, vol_mark_warnings = _record_nav(state.voltrend_book, trade_date, close_prices)
-    if not state.start_date:
-        state.start_date = trade_date
-    warnings = div_warnings + vol_div_warnings + div_mark_warnings + vol_mark_warnings
     next_day = store.next_trading_day(trade_date)
     month_end = store.is_last_trading_day_of_month(trade_date)
-    first_div_signal = not state.dividend_book.model_weights
-    if first_div_signal or month_end:
-        weights = dividend_weights(store, trade_date)
-        if weights:
-            state.dividend_book.model_weights = weights
-            warnings += _queue_plan(state.dividend_book, trade_date, next_day, weights, "MONTHLY_DIVIDEND")
-        else:
-            warnings.append("empty_dividend_universe")
-    elif div_reinvest:
-        warnings += _queue_plan(state.dividend_book, trade_date, next_day, {}, "DIVIDEND_REINVEST_SAME_STOCK", div_reinvest)
-    first_vol_signal = not state.voltrend_book.model_weights
-    if first_vol_signal or month_end:
-        weights = balanced_weights(store, trade_date)
-        if weights:
-            state.voltrend_book.model_weights = weights
-        else:
-            warnings.append("empty_voltrend_universe")
-    position = voltrend_target_position(state.voltrend_book, vol_nav, trade_date)
-    drawdown = _composite_drawdown(state)
-    risk_status = "NORMAL"
-    if drawdown <= RISK_HARD_DRAWDOWN and RISK_HARD_ACTION == "VOL_TO_CASH":
-        position = 0.0
-        risk_status = "HARD_VOL_TO_CASH"
-    elif drawdown <= RISK_ALERT_DRAWDOWN:
-        risk_status = "ALERT"
-    position_delta = position - state.voltrend_book.risk_position
-    position_refresh_due = VOLTREND_POSITION_FREQUENCY == "daily" or month_end or first_vol_signal
-    position_rebalance_due = position_refresh_due and abs(position_delta) >= POSITION_REBALANCE_THRESHOLD
-    voltrend_rebalance_due = first_vol_signal or month_end or position_rebalance_due
-    if state.voltrend_book.model_weights and voltrend_rebalance_due:
-        state.voltrend_book.risk_position = position
-        targets = {symbol: weight * position for symbol, weight in state.voltrend_book.model_weights.items()}
-        warnings += _queue_plan(state.voltrend_book, trade_date, next_day, targets, "VOL_TARGET_TREND")
+    needs_dividend_targets = month_end or any(
+        not strategy.dividend_book.model_weights for strategy in state.strategies.values()
+    )
+    needs_voltrend_targets = month_end or any(
+        not strategy.voltrend_book.model_weights for strategy in state.strategies.values()
+    )
+    dividend_targets = dividend_weights(store, trade_date) if needs_dividend_targets else {}
+    voltrend_targets = balanced_weights(store, trade_date) if needs_voltrend_targets else {}
+    strategy_results = {
+        key: _run_strategy_day(
+            strategy,
+            trade_date,
+            open_prices,
+            close_prices,
+            actions,
+            next_day,
+            month_end,
+            dividend_targets,
+            voltrend_targets,
+        )
+        for key, strategy in state.strategies.items()
+    }
+    if not state.start_date:
+        state.start_date = trade_date
     result = {
         "date": trade_date,
         "status": "COMPLETE",
@@ -296,16 +372,27 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
             "voltrend_position": VOLTREND_POSITION_FREQUENCY,
             "position_threshold": POSITION_REBALANCE_THRESHOLD,
         },
-        "voltrend_position_signal": {"target": position, "delta": round(position_delta, 4), "rebalance_due": position_rebalance_due},
-        "dividend_nav": round(div_nav, 2),
-        "voltrend_nav": round(vol_nav, 2),
-        "total_nav": round(div_nav + vol_nav, 2),
-        "drawdown": round(drawdown, 6),
-        "risk_status": risk_status,
-        "dividend_execution": div_exec,
-        "voltrend_execution": vol_exec,
-        "warnings": sorted(set(warnings)),
+        "strategies": strategy_results,
     }
+    strategy_a = strategy_results["A"]
+    result.update(
+        {
+            "dividend_nav": strategy_a["dividend_nav"],
+            "voltrend_nav": strategy_a["voltrend_nav"],
+            "total_nav": strategy_a["total_nav"],
+            "drawdown": strategy_a["drawdown"],
+            "risk_status": strategy_a["risk_status"],
+            "dividend_execution": strategy_a["dividend_execution"],
+            "voltrend_execution": strategy_a["voltrend_execution"],
+            "voltrend_position_signal": strategy_a["voltrend_position_signal"],
+            "warnings": sorted(
+                {
+                    warning
+                    for strategy_result in strategy_results.values()
+                    for warning in strategy_result["warnings"]
+                }
+            ),
+        }
+    )
     state.run_history.append(result)
     return result
-

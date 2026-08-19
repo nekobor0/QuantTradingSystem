@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .config import DIV_CAPITAL, STATE_FILE, VOL_CAPITAL
+from .config import PRINCIPAL, STATE_FILE
 from .models import (
     Book,
     CashEvent,
@@ -16,6 +16,8 @@ from .models import (
     Lot,
     PaperState,
     PendingPlan,
+    StrategyAccount,
+    default_strategies,
 )
 
 
@@ -39,11 +41,34 @@ def _book_from_dict(data: dict[str, Any], fallback_name: str, fallback_cash: flo
     )
 
 
+def _strategy_from_dict(key: str, data: dict[str, Any]) -> StrategyAccount:
+    defaults = default_strategies()[key]
+    dividend_weight = float(data.get("dividend_weight", defaults.dividend_weight))
+    voltrend_weight = float(data.get("voltrend_weight", defaults.voltrend_weight))
+    return StrategyAccount(
+        key=key,
+        name=str(data.get("name", defaults.name)),
+        dividend_weight=dividend_weight,
+        voltrend_weight=voltrend_weight,
+        dividend_book=_book_from_dict(
+            data.get("dividend_book", {}),
+            f"{key}_dividend",
+            PRINCIPAL * dividend_weight,
+        ),
+        voltrend_book=_book_from_dict(
+            data.get("voltrend_book", {}),
+            f"{key}_voltrend",
+            PRINCIPAL * voltrend_weight,
+        ),
+    )
+
+
 def _migrate_legacy(data: dict[str, Any]) -> PaperState:
-    """Preserve old observations but mark synthetic legacy holdings as unverified."""
+    """Preserve old observations but block execution until deterministic replay."""
     start = data.get("start_date") or "UNKNOWN"
     if isinstance(start, str) and len(start) == 8 and start.isdigit():
         start = f"{start[:4]}-{start[4:6]}-{start[6:8]}"
+    strategies = default_strategies()
 
     def convert(raw: dict[str, Any], name: str, fallback: float) -> Book:
         book = _book_from_dict(raw, name, fallback)
@@ -54,10 +79,15 @@ def _migrate_legacy(data: dict[str, Any]) -> PaperState:
                     book.lots[symbol] = [Lot.new(qty, start, 0.0)]
         return book
 
+    strategies["A"].dividend_book = convert(
+        data.get("dividend_book", {}), "A_dividend", PRINCIPAL * 0.25
+    )
+    strategies["A"].voltrend_book = convert(
+        data.get("voltrend_book", {}), "A_voltrend", PRINCIPAL * 0.75
+    )
     return PaperState(
         start_date=start,
-        dividend_book=convert(data.get("dividend_book", {}), "dividend", DIV_CAPITAL),
-        voltrend_book=convert(data.get("voltrend_book", {}), "voltrend", VOL_CAPITAL),
+        strategies=strategies,
         run_history=list(data.get("run_history", [])),
         reconciliations=list(data.get("reconciliations", [])),
         alerts=list(data.get("alerts", [])),
@@ -75,13 +105,17 @@ class StateRepository:
         if not self.path.exists():
             return PaperState()
         data = json.loads(self.path.read_text(encoding="utf-8"))
-        if int(data.get("version", 1)) < 2:
+        version = int(data.get("version", 1))
+        if version < 3:
             return _migrate_legacy(data)
+        strategies = {
+            key: _strategy_from_dict(key, data.get("strategies", {}).get(key, {}))
+            for key in ("A", "B")
+        }
         return PaperState(
-            version=2,
+            version=3,
             start_date=data.get("start_date", ""),
-            dividend_book=_book_from_dict(data.get("dividend_book", {}), "dividend", DIV_CAPITAL),
-            voltrend_book=_book_from_dict(data.get("voltrend_book", {}), "voltrend", VOL_CAPITAL),
+            strategies=strategies,
             run_history=list(data.get("run_history", [])),
             reconciliations=list(data.get("reconciliations", [])),
             alerts=list(data.get("alerts", [])),

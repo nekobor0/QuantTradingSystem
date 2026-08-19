@@ -1,4 +1,4 @@
-"""Local paper-account Web API. It contains no broker/order-submission adapter."""
+"""Local A/B paper-account Web API with no broker submission adapter."""
 
 from __future__ import annotations
 
@@ -19,12 +19,12 @@ from paper_trading.config import BASE_DIR, BENCHMARKS, DATA_DIR, PRINCIPAL
 from paper_trading.data_update import update_all
 from paper_trading.execution import book_nav, run_day
 from paper_trading.market import DataStore
-from paper_trading.models import Book
+from paper_trading.models import Book, StrategyAccount
 from paper_trading.monitoring import health_status, reconcile, record_alerts
 from paper_trading.state import StateRepository
 from paper_trading.strategies import scan
 
-app = FastAPI(title="模拟仓 Web UI", version="2")
+app = FastAPI(title="A/B 模拟仓 Web UI", version="3")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 repository = StateRepository()
 store = DataStore()
@@ -35,10 +35,14 @@ class BookSnapshot(BaseModel):
     holdings: dict[str, int]
 
 
-class ReconciliationRequest(BaseModel):
-    trade_date: str
+class StrategySnapshot(BaseModel):
     dividend: BookSnapshot
     voltrend: BookSnapshot
+
+
+class ReconciliationRequest(BaseModel):
+    trade_date: str
+    strategies: dict[str, StrategySnapshot]
     source: str = "manual_snapshot"
     cash_tolerance: float = 1.0
 
@@ -55,7 +59,11 @@ def _effective_date() -> str:
             return dates.max().strftime("%Y-%m-%d")
     calendar = store.calendar()
     completed = calendar[calendar <= pd.Timestamp.today().normalize()]
-    return completed[-1].strftime("%Y-%m-%d") if len(completed) else pd.Timestamp.today().strftime("%Y-%m-%d")
+    return (
+        completed[-1].strftime("%Y-%m-%d")
+        if len(completed)
+        else pd.Timestamp.today().strftime("%Y-%m-%d")
+    )
 
 
 def _stock_names() -> dict[str, str]:
@@ -84,7 +92,9 @@ def _holding_rows(
                 "name": names.get(symbol, ""),
                 "shares": shares,
                 "lots": len(lots),
-                "first_acquired_date": min((lot.acquired_date for lot in lots), default=""),
+                "first_acquired_date": min(
+                    (lot.acquired_date for lot in lots), default=""
+                ),
                 "average_cost": round(total_cost / shares, 4) if shares else 0.0,
                 "close": round(price, 4),
                 "market_value": round(market_value, 2),
@@ -92,6 +102,45 @@ def _holding_rows(
             }
         )
     return sorted(rows, key=lambda row: row["market_value"], reverse=True)
+
+
+def _book_payload(
+    book: Book, prices: dict[str, float], names: dict[str, str]
+) -> tuple[dict[str, Any], list[str]]:
+    nav, warnings = book_nav(book, prices)
+    return (
+        {
+            "name": book.name,
+            "cash": round(book.cash, 2),
+            "nav": round(nav, 2),
+            "holdings": book.holdings,
+            "holding_rows": _holding_rows(book, prices, names, nav),
+            "pending_plan": book.pending_plan,
+            "risk_position": book.risk_position,
+        },
+        warnings,
+    )
+
+
+def _strategy_payload(
+    strategy: StrategyAccount, prices: dict[str, float], names: dict[str, str]
+) -> tuple[dict[str, Any], list[str]]:
+    dividend, dividend_warnings = _book_payload(strategy.dividend_book, prices, names)
+    voltrend, voltrend_warnings = _book_payload(strategy.voltrend_book, prices, names)
+    return (
+        {
+            "key": strategy.key,
+            "name": strategy.name,
+            "principal": PRINCIPAL,
+            "dividend_weight": strategy.dividend_weight,
+            "voltrend_weight": strategy.voltrend_weight,
+            "total_nav": round(dividend["nav"] + voltrend["nav"], 2),
+            "return": round((dividend["nav"] + voltrend["nav"]) / PRINCIPAL - 1.0, 8),
+            "dividend": dividend,
+            "voltrend": voltrend,
+        },
+        dividend_warnings + voltrend_warnings,
+    )
 
 
 def _update_summary(result: dict[str, Any]) -> dict[str, Any]:
@@ -148,61 +197,85 @@ def api_state():
     trade_date = _effective_date()
     prices = store.prices(trade_date, "close")
     names = _stock_names()
-    dividend_nav, dividend_warnings = book_nav(state.dividend_book, prices)
-    voltrend_nav, voltrend_warnings = book_nav(state.voltrend_book, prices)
-    return {
+    strategies: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
+    for key, strategy in state.strategies.items():
+        payload, strategy_warnings = _strategy_payload(strategy, prices, names)
+        strategies[key] = payload
+        warnings.extend(f"{key}:{warning}" for warning in strategy_warnings)
+    result = {
         "version": state.version,
         "legacy_import": state.legacy_import,
         "start_date": state.start_date,
         "effective_date": trade_date,
-        "principal": PRINCIPAL,
+        "effective_interval": {
+            "start": state.start_date or trade_date,
+            "end": trade_date,
+        },
+        "principal_per_strategy": PRINCIPAL,
+        "strategies": strategies,
         "last_data_update": state.last_data_update,
         "last_scan": state.last_scan,
         "latest_run": state.run_history[-1] if state.run_history else None,
-        "dividend": {
-            "cash": round(state.dividend_book.cash, 2),
-            "nav": round(dividend_nav, 2),
-            "holdings": state.dividend_book.holdings,
-            "holding_rows": _holding_rows(state.dividend_book, prices, names, dividend_nav),
-            "pending_plan": state.dividend_book.pending_plan,
-        },
-        "voltrend": {
-            "cash": round(state.voltrend_book.cash, 2),
-            "nav": round(voltrend_nav, 2),
-            "position": state.voltrend_book.risk_position,
-            "holdings": state.voltrend_book.holdings,
-            "holding_rows": _holding_rows(state.voltrend_book, prices, names, voltrend_nav),
-            "pending_plan": state.voltrend_book.pending_plan,
-        },
-        "total_nav": round(dividend_nav + voltrend_nav, 2),
-        "warnings": dividend_warnings + voltrend_warnings,
+        "warnings": warnings,
         "alerts": state.alerts[-100:],
     }
+    result.update(
+        {
+            "principal": PRINCIPAL,
+            "dividend": strategies["A"]["dividend"],
+            "voltrend": strategies["A"]["voltrend"],
+            "total_nav": strategies["A"]["total_nav"],
+        }
+    )
+    return result
 
 
 @app.get("/api/nav")
 def api_nav():
     state = repository.load()
-    dividend = state.dividend_book.nav_history
-    voltrend = state.voltrend_book.nav_history
-    dates = [row["date"] for row in dividend]
+    series: dict[str, dict[str, Any]] = {}
+    all_dates: set[str] = set()
+    for key, strategy in state.strategies.items():
+        dividend = strategy.dividend_book.nav_history
+        voltrend = strategy.voltrend_book.nav_history
+        dates = [str(row["date"]) for row in dividend]
+        all_dates.update(dates)
+        total = [float(a["nav"]) + float(b["nav"]) for a, b in zip(dividend, voltrend)]
+        series[key] = {
+            "name": strategy.name,
+            "dates": dates,
+            "dividend": [float(row["nav"]) for row in dividend],
+            "voltrend": [float(row["nav"]) for row in voltrend],
+            "total": total,
+            "return": [value / PRINCIPAL - 1.0 for value in total],
+        }
     return {
-        "dates": dates,
-        "dividend": [row["nav"] for row in dividend],
-        "voltrend": [row["nav"] for row in voltrend],
-        "combined": [a["nav"] + b["nav"] for a, b in zip(dividend, voltrend)],
+        "principal_per_strategy": PRINCIPAL,
+        "dates": sorted(all_dates),
+        "series": series,
     }
 
 
 @app.get("/api/audit")
 def api_audit():
     state = repository.load()
+    strategies = {
+        key: {
+            "dividend_fills": [fill.__dict__ for fill in strategy.dividend_book.fills[-500:]],
+            "voltrend_fills": [fill.__dict__ for fill in strategy.voltrend_book.fills[-500:]],
+            "dividend_cash_events": [event.__dict__ for event in strategy.dividend_book.cash_events[-200:]],
+            "voltrend_cash_events": [event.__dict__ for event in strategy.voltrend_book.cash_events[-200:]],
+        }
+        for key, strategy in state.strategies.items()
+    }
     return {
         "runs": state.run_history[-60:],
-        "dividend_fills": [fill.__dict__ for fill in state.dividend_book.fills[-500:]],
-        "voltrend_fills": [fill.__dict__ for fill in state.voltrend_book.fills[-500:]],
-        "dividend_cash_events": [event.__dict__ for event in state.dividend_book.cash_events[-200:]],
-        "voltrend_cash_events": [event.__dict__ for event in state.voltrend_book.cash_events[-200:]],
+        "strategies": strategies,
+        "dividend_fills": strategies["A"]["dividend_fills"],
+        "voltrend_fills": strategies["A"]["voltrend_fills"],
+        "dividend_cash_events": strategies["A"]["dividend_cash_events"],
+        "voltrend_cash_events": strategies["A"]["voltrend_cash_events"],
     }
 
 
@@ -224,11 +297,13 @@ def api_p2_check():
 @app.post("/api/p2/reconcile")
 def api_p2_reconcile(payload: ReconciliationRequest):
     state = repository.load()
+    snapshots = {
+        key: _model_dump(snapshot) for key, snapshot in payload.strategies.items()
+    }
     record = reconcile(
         state,
         payload.trade_date,
-        _model_dump(payload.dividend),
-        _model_dump(payload.voltrend),
+        snapshots,
         payload.source,
         payload.cash_tolerance,
     )
@@ -303,8 +378,8 @@ def api_run_daily(trade_date: str | None = None, update_data: bool = True):
 
 @app.post("/api/reset")
 def api_reset():
-    repository.reset()
-    return {"ok": True}
+    state = repository.reset()
+    return {"ok": True, "version": state.version, "strategies": sorted(state.strategies)}
 
 
 if __name__ == "__main__":

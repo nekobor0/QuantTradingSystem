@@ -8,12 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import (
-    ALLOW_LIVE_TRADING,
-    ENABLE_ORDER_SUBMISSION,
-    STATE_FILE,
-    TRADING_MODE,
-)
+from .config import ALLOW_LIVE_TRADING, ENABLE_ORDER_SUBMISSION, STATE_FILE, TRADING_MODE
 from .execution import run_day
 from .market import DataStore
 from .models import PaperState
@@ -54,16 +49,31 @@ def replay(
         repository.save(state)
         runs.append(result)
 
+    strategies = {
+        key: {
+            "name": strategy.name,
+            "dividend_weight": strategy.dividend_weight,
+            "voltrend_weight": strategy.voltrend_weight,
+            "dividend_fills": len(strategy.dividend_book.fills),
+            "voltrend_fills": len(strategy.voltrend_book.fills),
+            "dividend_holdings": len(strategy.dividend_book.holdings),
+            "voltrend_holdings": len(strategy.voltrend_book.holdings),
+            "latest_nav": runs[-1]["strategies"][key]["total_nav"] if runs else None,
+        }
+        for key, strategy in state.strategies.items()
+    }
     return {
-        "mode": "PAPER_REPLAY",
+        "mode": "PAPER_REPLAY_AB",
         "start": start_date.strftime("%Y-%m-%d"),
         "end": end_date.strftime("%Y-%m-%d"),
         "open_trading_days": len(selected),
         "complete_runs": len(runs),
-        "dividend_fills": len(state.dividend_book.fills),
-        "voltrend_fills": len(state.voltrend_book.fills),
+        "strategies": strategies,
         "latest_scan": state.last_scan,
         "latest_run": state.run_history[-1] if state.run_history else None,
+        # Compatibility fields continue to describe strategy A.
+        "dividend_fills": strategies["A"]["dividend_fills"],
+        "voltrend_fills": strategies["A"]["voltrend_fills"],
     }
 
 

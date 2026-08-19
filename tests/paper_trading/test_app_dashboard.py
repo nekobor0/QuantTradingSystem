@@ -7,34 +7,38 @@ from fastapi.testclient import TestClient
 
 import paper_trading.app as web
 import paper_trading.strategies as strategies
-from paper_trading.config import DIV_CAPITAL, TOP_N, VOL_CAPITAL
+from paper_trading.config import TOP_N
 from paper_trading.data_update import WARMUP_DAYS, _fetch_dividend_actions, _required_quote_dates
 from paper_trading.market import DataStore
 from paper_trading.models import Lot, PaperState
 from paper_trading.state import StateRepository
 
 
-def test_best_strategy_is_the_new_empty_account_default() -> None:
+def test_ab_strategies_each_start_with_an_independent_million() -> None:
     state = PaperState()
     assert TOP_N == 50
-    assert DIV_CAPITAL == 250_000.0
-    assert VOL_CAPITAL == 750_000.0
-    assert state.dividend_book.cash == DIV_CAPITAL
-    assert state.voltrend_book.cash == VOL_CAPITAL
+    assert set(state.strategies) == {"A", "B"}
+    assert state.strategies["A"].dividend_weight == 0.25
+    assert state.strategies["A"].voltrend_weight == 0.75
+    assert state.strategies["B"].dividend_weight == 0.75
+    assert state.strategies["B"].voltrend_weight == 0.25
+    for strategy in state.strategies.values():
+        assert strategy.dividend_book.cash + strategy.voltrend_book.cash == 1_000_000.0
 
 
-def test_dashboard_exposes_ordered_pipeline_p2_signals_and_close_holdings() -> None:
+def test_dashboard_exposes_ab_pipeline_interval_nav_chart_and_four_books() -> None:
     html = (Path(web.BASE_DIR) / "templates" / "index.html").read_text(encoding="utf-8")
     for number in range(1, 6):
         assert f'<span class="step-no">{number}</span>' in html
-    assert "数据更新结果" in html
-    assert "当天扫描信号" in html
-    assert "有效交易日收盘持仓" in html
-    assert "P2 独立影子验证" in html
-    assert "禁止用内部账本自动回填" in html
+    assert "有效交易区间" in html
+    assert "当日策略净值（起始净值100万元）" in html
+    assert "A/B 策略累计收益曲线" in html
+    assert "A/B 四分仓快照" in html
+    assert "执行 AB 信号扫描" in html
+    assert "执行 AB 当日流程" in html
 
 
-def test_p2_reconciliation_endpoint_accepts_an_external_snapshot(
+def test_p2_reconciliation_endpoint_requires_and_accepts_both_strategies(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -46,16 +50,26 @@ def test_p2_reconciliation_endpoint_accepts_an_external_snapshot(
         json={
             "trade_date": "2026-08-19",
             "source": "test_external_snapshot",
-            "dividend": {"cash": 250_000.0, "holdings": {}},
-            "voltrend": {"cash": 750_000.0, "holdings": {}},
+            "strategies": {
+                "A": {
+                    "dividend": {"cash": 250_000.0, "holdings": {}},
+                    "voltrend": {"cash": 750_000.0, "holdings": {}},
+                },
+                "B": {
+                    "dividend": {"cash": 750_000.0, "holdings": {}},
+                    "voltrend": {"cash": 250_000.0, "holdings": {}},
+                },
+            },
         },
     )
     assert response.status_code == 200
-    assert response.json()["reconciliation"]["status"] == "PASS"
-    assert response.json()["p2"]["live_order_submission"] is False
+    body = response.json()
+    assert body["reconciliation"]["status"] == "PASS"
+    assert set(body["reconciliation"]["strategies"]) == {"A", "B"}
+    assert body["p2"]["live_order_submission"] is False
 
 
-def test_scan_returns_full_buy_and_sell_constituent_changes(monkeypatch) -> None:
+def test_scan_returns_both_strategies_and_a_compatibility_view(monkeypatch) -> None:
     class StubStore:
         def read(self, name: str) -> pd.DataFrame:
             assert name == "stock_basic.parquet"
@@ -69,17 +83,34 @@ def test_scan_returns_full_buy_and_sell_constituent_changes(monkeypatch) -> None
         def next_trading_day(self, trade_date: str) -> str:
             return "2026-09-01"
 
-    monkeypatch.setattr(strategies, "dividend_weights", lambda store, date: {"BBB": 0.5, "CCC": 0.5})
+    monkeypatch.setattr(
+        strategies, "dividend_weights", lambda store, date: {"BBB": 0.5, "CCC": 0.5}
+    )
     monkeypatch.setattr(strategies, "balanced_weights", lambda store, date: {"CCC": 1.0})
     state = PaperState()
-    state.dividend_book.lots = {
+    state.strategies["A"].dividend_book.lots = {
         "AAA": [Lot.new(100, "2026-01-01", 10.0)],
         "BBB": [Lot.new(100, "2026-01-01", 10.0)],
     }
     result = strategies.scan(state, StubStore(), "2026-08-31")
-    assert [row["symbol"] for row in result["dividend_changes"]["buy"]] == ["CCC"]
+    assert set(result["strategies"]) == {"A", "B"}
+    assert [row["symbol"] for row in result["strategies"]["A"]["dividend_changes"]["buy"]] == ["CCC"]
     assert [row["symbol"] for row in result["dividend_changes"]["sell"]] == ["AAA"]
     assert result["signal_status"] == "REBALANCE_DUE"
+
+
+def test_nav_endpoint_returns_ab_total_and_return_series(tmp_path: Path, monkeypatch) -> None:
+    repo = StateRepository(tmp_path / "state.json")
+    state = PaperState(start_date="2026-08-17")
+    for strategy in state.strategies.values():
+        strategy.dividend_book.nav_history = [{"date": "2026-08-17", "nav": strategy.dividend_book.cash, "ret": 0.0}]
+        strategy.voltrend_book.nav_history = [{"date": "2026-08-17", "nav": strategy.voltrend_book.cash, "ret": 0.0}]
+    repo.save(state)
+    monkeypatch.setattr(web, "repository", repo)
+    body = TestClient(web.app).get("/api/nav").json()
+    assert set(body["series"]) == {"A", "B"}
+    assert body["series"]["A"]["total"] == [1_000_000.0]
+    assert body["series"]["B"]["return"] == [0.0]
 
 
 def test_dividend_daily_query_uses_supported_dates_and_surfaces_partial_errors() -> None:

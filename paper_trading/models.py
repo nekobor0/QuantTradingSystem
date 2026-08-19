@@ -95,11 +95,49 @@ class Book:
 
 
 @dataclass
+class StrategyAccount:
+    key: str
+    name: str
+    dividend_weight: float
+    voltrend_weight: float
+    dividend_book: Book
+    voltrend_book: Book
+
+    @classmethod
+    def new(
+        cls,
+        key: str,
+        name: str,
+        dividend_weight: float,
+        voltrend_weight: float,
+        principal: float = 1_000_000.0,
+    ) -> "StrategyAccount":
+        return cls(
+            key=key,
+            name=name,
+            dividend_weight=dividend_weight,
+            voltrend_weight=voltrend_weight,
+            dividend_book=Book(f"{key}_dividend", principal * dividend_weight),
+            voltrend_book=Book(f"{key}_voltrend", principal * voltrend_weight),
+        )
+
+    @property
+    def books(self) -> tuple[Book, Book]:
+        return self.dividend_book, self.voltrend_book
+
+
+def default_strategies() -> dict[str, StrategyAccount]:
+    return {
+        "A": StrategyAccount.new("A", "A策略：25%红利 + 75%波动", 0.25, 0.75),
+        "B": StrategyAccount.new("B", "B策略：75%红利 + 25%波动", 0.75, 0.25),
+    }
+
+
+@dataclass
 class PaperState:
-    version: int = 2
+    version: int = 3
     start_date: str = ""
-    dividend_book: Book = field(default_factory=lambda: Book("dividend", 250_000.0))
-    voltrend_book: Book = field(default_factory=lambda: Book("voltrend", 750_000.0))
+    strategies: dict[str, StrategyAccount] = field(default_factory=default_strategies)
     run_history: list[dict[str, Any]] = field(default_factory=list)
     reconciliations: list[dict[str, Any]] = field(default_factory=list)
     alerts: list[dict[str, Any]] = field(default_factory=list)
@@ -107,6 +145,19 @@ class PaperState:
     last_scan: dict[str, Any] | None = None
     legacy_import: bool = False
 
+    @property
+    def dividend_book(self) -> Book:
+        """Compatibility alias for strategy A."""
+        return self.strategies["A"].dividend_book
+
+    @property
+    def voltrend_book(self) -> Book:
+        """Compatibility alias for strategy A."""
+        return self.strategies["A"].voltrend_book
+
+    @property
+    def books(self) -> list[Book]:
+        return [book for strategy in self.strategies.values() for book in strategy.books]
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
