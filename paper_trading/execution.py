@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from math import floor
 from uuid import uuid4
 
@@ -12,13 +11,15 @@ import pandas as pd
 from .config import (
     BUY_LOT,
     MA_N,
+    POSITION_REBALANCE_THRESHOLD,
     RISK_ALERT_DRAWDOWN,
     RISK_HARD_ACTION,
     RISK_HARD_DRAWDOWN,
     TARGET_VOL,
+    VOLTREND_POSITION_FREQUENCY,
     VOL_WINDOW,
     commission,
-    dividend_tax_rate,
+    dividend_tax_rate_for_dates,
     stamp_duty_rate,
 )
 from .market import DataStore, balanced_weights, dividend_weights
@@ -49,8 +50,8 @@ def _sell_fifo(book: Book, plan_id: str, symbol: str, shares: int, price: float,
             kept.append(lot)
             continue
         sold = min(lot.shares, remaining)
-        held_days = (date.fromisoformat(trade_date) - date.fromisoformat(lot.acquired_date)).days
-        dividend_tax += sold * lot.taxable_dividend_per_share * dividend_tax_rate(held_days)
+        tax_rate = dividend_tax_rate_for_dates(lot.acquired_date, trade_date)
+        dividend_tax += sold * lot.taxable_dividend_per_share * tax_rate
         lot.shares -= sold
         remaining -= sold
         if lot.shares > 0:
@@ -151,7 +152,9 @@ def process_dividends(book: Book, trade_date: str, actions: pd.DataFrame) -> tup
     records = actions[actions["record_date"].eq(trade_date)] if "record_date" in actions else pd.DataFrame()
     for row in records.to_dict("records"):
         symbol = str(row.get("ts_code", ""))
-        cash_div = float(row.get("cash_div") or 0.0)
+        cash_div_value = row.get("cash_div_tax")
+        cash_div_value = row.get("cash_div") if pd.isna(cash_div_value) else cash_div_value
+        cash_div = 0.0 if pd.isna(cash_div_value) else float(cash_div_value)
         pay_date = row.get("pay_date")
         shares = book.shares(symbol)
         entitlement_id = f"{symbol}:{trade_date}:{pay_date}:{cash_div}"
@@ -189,11 +192,19 @@ def _record_nav(book: Book, trade_date: str, close_prices: dict[str, float]) -> 
     return nav, warnings
 
 
-def _voltrend_position(book: Book, current_nav: float) -> float:
+def voltrend_target_position(
+    book: Book,
+    current_nav: float,
+    trade_date: str | None = None,
+) -> float:
     returns = [float(row["ret"]) for row in book.nav_history]
+    navs = [float(row["nav"]) for row in book.nav_history]
+    if trade_date and (not book.nav_history or book.nav_history[-1].get("date") != trade_date):
+        previous_nav = navs[-1] if navs else current_nav
+        returns.append(current_nav / previous_nav - 1.0 if previous_nav else 0.0)
+        navs.append(current_nav)
     vol = float(np.std(returns[-VOL_WINDOW:], ddof=0) * np.sqrt(252)) if len(returns) >= 10 else 0.0
     vol_position = min(1.0, TARGET_VOL / vol) if vol > 0 else 1.0
-    navs = [float(row["nav"]) for row in book.nav_history]
     moving_average = float(np.mean(navs[-MA_N:])) if len(navs) >= MA_N else current_nav
     return round(vol_position * (1.0 if current_nav >= moving_average else 0.0), 4)
 
@@ -220,6 +231,8 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
     if state.legacy_import:
         return {"date": trade_date, "status": "BLOCKED", "errors": ["legacy_state_requires_reset_or_verified_import"]}
     trade_date = pd.Timestamp(trade_date).strftime("%Y-%m-%d")
+    if pd.Timestamp(trade_date).normalize() not in store.calendar():
+        return {"date": trade_date, "status": "BLOCKED", "errors": ["not_an_open_trading_day"]}
     if any(row.get("date") == trade_date and row.get("status") == "COMPLETE" for row in state.run_history):
         return {"date": trade_date, "already_executed": True}
     open_prices = store.prices(trade_date, "open")
@@ -255,7 +268,7 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
             state.voltrend_book.model_weights = weights
         else:
             warnings.append("empty_voltrend_universe")
-    position = _voltrend_position(state.voltrend_book, vol_nav)
+    position = voltrend_target_position(state.voltrend_book, vol_nav, trade_date)
     drawdown = _composite_drawdown(state)
     risk_status = "NORMAL"
     if drawdown <= RISK_HARD_DRAWDOWN and RISK_HARD_ACTION == "VOL_TO_CASH":
@@ -263,7 +276,11 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
         risk_status = "HARD_VOL_TO_CASH"
     elif drawdown <= RISK_ALERT_DRAWDOWN:
         risk_status = "ALERT"
-    if state.voltrend_book.model_weights and (first_vol_signal or month_end or abs(position - state.voltrend_book.risk_position) >= 0.01):
+    position_delta = position - state.voltrend_book.risk_position
+    position_refresh_due = VOLTREND_POSITION_FREQUENCY == "daily" or month_end or first_vol_signal
+    position_rebalance_due = position_refresh_due and abs(position_delta) >= POSITION_REBALANCE_THRESHOLD
+    voltrend_rebalance_due = first_vol_signal or month_end or position_rebalance_due
+    if state.voltrend_book.model_weights and voltrend_rebalance_due:
         state.voltrend_book.risk_position = position
         targets = {symbol: weight * position for symbol, weight in state.voltrend_book.model_weights.items()}
         warnings += _queue_plan(state.voltrend_book, trade_date, next_day, targets, "VOL_TARGET_TREND")
@@ -272,6 +289,14 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
         "status": "COMPLETE",
         "month_end": month_end,
         "next_execution_date": next_day,
+        "execution_policy": {
+            "calendar": "exchange_open_days",
+            "dividend_constituents": "monthly",
+            "voltrend_constituents": "monthly",
+            "voltrend_position": VOLTREND_POSITION_FREQUENCY,
+            "position_threshold": POSITION_REBALANCE_THRESHOLD,
+        },
+        "voltrend_position_signal": {"target": position, "delta": round(position_delta, 4), "rebalance_due": position_rebalance_due},
         "dividend_nav": round(div_nav, 2),
         "voltrend_nav": round(vol_nav, 2),
         "total_nav": round(div_nav + vol_nav, 2),

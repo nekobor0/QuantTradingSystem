@@ -98,10 +98,13 @@ class Book:
 class PaperState:
     version: int = 2
     start_date: str = ""
-    dividend_book: Book = field(default_factory=lambda: Book("dividend", 750_000.0))
-    voltrend_book: Book = field(default_factory=lambda: Book("voltrend", 250_000.0))
+    dividend_book: Book = field(default_factory=lambda: Book("dividend", 250_000.0))
+    voltrend_book: Book = field(default_factory=lambda: Book("voltrend", 750_000.0))
     run_history: list[dict[str, Any]] = field(default_factory=list)
     reconciliations: list[dict[str, Any]] = field(default_factory=list)
+    alerts: list[dict[str, Any]] = field(default_factory=list)
+    last_data_update: dict[str, Any] | None = None
+    last_scan: dict[str, Any] | None = None
     legacy_import: bool = False
 
     def to_dict(self) -> dict[str, Any]:

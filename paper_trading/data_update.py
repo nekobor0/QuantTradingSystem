@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import tushare as ts
@@ -77,22 +78,26 @@ def _existing_quote_dates() -> set[str]:
     return set(pd.to_datetime(quotes["trade_date"]).dt.strftime("%Y%m%d"))
 
 
-def _fetch_dividend_actions(pro, trade_date: str) -> pd.DataFrame:
+def _required_quote_dates(open_days: list[str], existing: set[str]) -> list[str]:
+    return [trade_date for trade_date in open_days[-WARMUP_DAYS:] if trade_date not in existing]
+
+
+def _fetch_dividend_actions(pro, trade_date: str) -> tuple[pd.DataFrame, list[str]]:
     frames: list[pd.DataFrame] = []
-    fields = "ts_code,end_date,ann_date,div_proc,cash_div,ex_date,record_date,pay_date"
-    for key in ("record_date", "pay_date", "ex_date"):
+    errors: list[str] = []
+    fields = "ts_code,end_date,ann_date,div_proc,cash_div,cash_div_tax,ex_date,record_date,pay_date"
+    for key in ("record_date", "ex_date"):
         try:
             frame = pro.dividend(**{key: trade_date, "fields": fields})
             if frame is not None and not frame.empty:
                 frames.append(frame)
-        except Exception:
-            # The error is reported by the caller when all variants fail.
-            continue
-    return pd.concat(frames, ignore_index=True).drop_duplicates() if frames else pd.DataFrame()
+        except Exception as exc:
+            errors.append(f"{key}:{type(exc).__name__}:{exc}")
+    return (pd.concat(frames, ignore_index=True).drop_duplicates() if frames else pd.DataFrame()), errors
 
 
-def _fetch_day(pro, trade_date: str) -> dict[str, int | str]:
-    result: dict[str, int | str] = {"trade_date": trade_date}
+def _fetch_day(pro, trade_date: str) -> dict[str, Any]:
+    result: dict[str, Any] = {"trade_date": trade_date}
     quotes = pro.daily(trade_date=trade_date, fields="ts_code,trade_date,open,close,amount,vol")
     if quotes is None or quotes.empty:
         result["status"] = "NO_QUOTES"
@@ -110,7 +115,8 @@ def _fetch_day(pro, trade_date: str) -> dict[str, int | str]:
         _save(valuation, "valuation.parquet", ["ts_code", "trade_date"])
     result["valuation"] = 0 if valuation is None else len(valuation)
 
-    actions = _fetch_dividend_actions(pro, trade_date)
+    actions, dividend_query_errors = _fetch_dividend_actions(pro, trade_date)
+    result["dividend_query_errors"] = dividend_query_errors
     _save(actions, "dividend.parquet", ["ts_code", "record_date", "pay_date", "cash_div"])
     result["dividend"] = len(actions)
 
@@ -141,10 +147,7 @@ def update_all(requested_date: str) -> dict:
 
     open_days = _open_days(calendar, effective)
     existing = _existing_quote_dates()
-    if not existing:
-        required = open_days[-WARMUP_DAYS:]
-    else:
-        required = [day for day in open_days if day not in existing]
+    required = _required_quote_dates(open_days, existing)
     runs: list[dict] = []
     errors: list[dict[str, str]] = []
     for trade_date in required:

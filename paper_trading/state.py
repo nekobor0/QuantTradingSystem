@@ -60,6 +60,9 @@ def _migrate_legacy(data: dict[str, Any]) -> PaperState:
         voltrend_book=convert(data.get("voltrend_book", {}), "voltrend", VOL_CAPITAL),
         run_history=list(data.get("run_history", [])),
         reconciliations=list(data.get("reconciliations", [])),
+        alerts=list(data.get("alerts", [])),
+        last_data_update=data.get("last_data_update"),
+        last_scan=data.get("last_scan"),
         legacy_import=True,
     )
 
@@ -81,6 +84,9 @@ class StateRepository:
             voltrend_book=_book_from_dict(data.get("voltrend_book", {}), "voltrend", VOL_CAPITAL),
             run_history=list(data.get("run_history", [])),
             reconciliations=list(data.get("reconciliations", [])),
+            alerts=list(data.get("alerts", [])),
+            last_data_update=data.get("last_data_update"),
+            last_scan=data.get("last_scan"),
             legacy_import=bool(data.get("legacy_import", False)),
         )
 
