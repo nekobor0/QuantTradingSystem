@@ -96,10 +96,17 @@ def _buy(book: Book, plan_id: str, symbol: str, requested_shares: int, price: fl
     return fill
 
 
-def execute_pending_plan(book: Book, trade_date: str, open_prices: dict[str, float]) -> dict:
+def execute_pending_plan(
+    book: Book,
+    trade_date: str,
+    open_prices: dict[str, float],
+    close_prices: dict[str, float] | None = None,
+    up_limits: dict[str, float] | None = None,
+) -> dict:
     plan = book.pending_plan
     if plan is None or plan.status != "PENDING" or plan.execute_date != trade_date:
         return {"status": "NO_PLAN", "fills": [], "warnings": []}
+    realistic_execution = close_prices is not None and up_limits is not None
     missing_held = sorted(symbol for symbol in book.holdings if symbol not in open_prices)
     if missing_held:
         plan.warnings.append("missing_open_for_held:" + ",".join(missing_held))
@@ -111,12 +118,40 @@ def execute_pending_plan(book: Book, trade_date: str, open_prices: dict[str, flo
         plan.warnings.append("target_weights_exceed_one")
         return {"status": "REJECTED", "fills": [], "warnings": list(plan.warnings)}
     desired: dict[str, int] = {}
+    buy_prices: dict[str, float] = {}
     for symbol, weight in targets.items():
-        price = open_prices.get(symbol)
-        if price and price > 0:
-            desired[symbol] = floor(nav * weight / price / BUY_LOT) * BUY_LOT
-        else:
+        if weight <= 0:
+            desired[symbol] = 0
+            continue
+        open_price = open_prices.get(symbol)
+        close_price = close_prices.get(symbol) if close_prices is not None else None
+        if not open_price or open_price <= 0:
             plan.warnings.append(f"missing_open_for_target:{symbol}")
+            return {"status": "BLOCKED", "fills": [], "warnings": list(plan.warnings)}
+        if realistic_execution and (close_price is None or close_price <= 0):
+            plan.warnings.append(f"missing_close_for_target:{symbol}")
+            return {"status": "BLOCKED", "fills": [], "warnings": list(plan.warnings)}
+        price = (open_price + close_price) / 2.0 if realistic_execution else open_price
+        if price and price > 0:
+            buy_prices[symbol] = price
+            desired[symbol] = floor(nav * weight / price / BUY_LOT) * BUY_LOT
+    if realistic_execution:
+        missing_limits = sorted(
+            symbol
+            for symbol, target in desired.items()
+            if target > book.shares(symbol) and symbol not in up_limits
+        )
+        for symbol, amount in plan.cash_buys.items():
+            if amount <= 0:
+                continue
+            if symbol not in open_prices or symbol not in close_prices:
+                plan.warnings.append(f"missing_price_for_cash_buy:{symbol}")
+                return {"status": "BLOCKED", "fills": [], "warnings": list(plan.warnings)}
+            if symbol not in up_limits and symbol not in missing_limits:
+                missing_limits.append(symbol)
+        if missing_limits:
+            plan.warnings.append("missing_up_limit_for_buy:" + ",".join(sorted(missing_limits)))
+            return {"status": "BLOCKED", "fills": [], "warnings": list(plan.warnings)}
     fills: list[Fill] = []
     for symbol, current in sorted(book.holdings.items()):
         target = desired.get(symbol, 0)
@@ -127,19 +162,37 @@ def execute_pending_plan(book: Book, trade_date: str, open_prices: dict[str, flo
     for symbol, target in sorted(desired.items()):
         current = book.shares(symbol)
         if target > current:
-            fill = _buy(book, plan.plan_id, symbol, target - current, open_prices[symbol], trade_date)
+            if realistic_execution and close_prices[symbol] >= up_limits[symbol] - 0.001:
+                plan.warnings.append(f"limit_up_buy_skipped:{symbol}")
+                continue
+            fill = _buy(book, plan.plan_id, symbol, target - current, buy_prices[symbol], trade_date)
             if fill:
                 fills.append(fill)
     for symbol, amount in sorted(plan.cash_buys.items()):
-        price = open_prices.get(symbol)
+        open_price = open_prices.get(symbol)
+        close_price = close_prices.get(symbol) if close_prices is not None else None
+        price = (
+            (open_price + close_price) / 2.0
+            if realistic_execution and open_price and close_price
+            else open_price
+        )
         if price and price > 0 and amount > 0:
+            if realistic_execution and close_prices[symbol] >= up_limits[symbol] - 0.001:
+                plan.warnings.append(f"limit_up_buy_skipped:{symbol}")
+                continue
             fill = _buy(book, plan.plan_id, symbol, floor(amount / price), price, trade_date)
             if fill:
                 fills.append(fill)
         else:
             plan.warnings.append(f"cash_buy_unfilled:{symbol}")
     plan.status = "FILLED" if not plan.warnings else "PARTIAL"
-    result = {"status": plan.status, "fills": [fill.__dict__ for fill in fills], "warnings": list(plan.warnings)}
+    result = {
+        "status": plan.status,
+        "fills": [fill.__dict__ for fill in fills],
+        "warnings": list(plan.warnings),
+        "sell_price_policy": "open",
+        "buy_price_policy": "open_close_average" if realistic_execution else "open",
+    }
     book.pending_plan = None
     return result
 
@@ -241,6 +294,7 @@ def _run_strategy_day(
     trade_date: str,
     open_prices: dict[str, float],
     close_prices: dict[str, float],
+    up_limits: dict[str, float],
     actions: pd.DataFrame,
     next_day: str | None,
     month_end: bool,
@@ -249,8 +303,12 @@ def _run_strategy_day(
 ) -> dict:
     dividend_book = strategy.dividend_book
     voltrend_book = strategy.voltrend_book
-    div_exec = execute_pending_plan(dividend_book, trade_date, open_prices)
-    vol_exec = execute_pending_plan(voltrend_book, trade_date, open_prices)
+    div_exec = execute_pending_plan(
+        dividend_book, trade_date, open_prices, close_prices, up_limits
+    )
+    vol_exec = execute_pending_plan(
+        voltrend_book, trade_date, open_prices, close_prices, up_limits
+    )
     div_reinvest, div_warnings = process_dividends(dividend_book, trade_date, actions)
     _, vol_div_warnings = process_dividends(voltrend_book, trade_date, actions)
     div_nav, div_mark_warnings = _record_nav(dividend_book, trade_date, close_prices)
@@ -331,6 +389,7 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
         return {"date": trade_date, "already_executed": True}
     open_prices = store.prices(trade_date, "open")
     close_prices = store.prices(trade_date, "close")
+    up_limits = store.up_limits(trade_date)
     if not open_prices or not close_prices:
         return {"date": trade_date, "status": "BLOCKED", "errors": ["missing_open_or_close_prices"]}
     actions = store.corporate_actions()
@@ -350,6 +409,7 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
             trade_date,
             open_prices,
             close_prices,
+            up_limits,
             actions,
             next_day,
             month_end,
@@ -367,6 +427,8 @@ def run_day(state: PaperState, store: DataStore, trade_date: str) -> dict:
         "next_execution_date": next_day,
         "execution_policy": {
             "calendar": "exchange_open_days",
+            "sell_price": "open",
+            "buy_price": "open_close_average_exclude_close_at_official_up_limit",
             "dividend_constituents": "monthly",
             "voltrend_constituents": "monthly",
             "voltrend_position": VOLTREND_POSITION_FREQUENCY,

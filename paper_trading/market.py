@@ -59,6 +59,17 @@ class DataStore:
         day = day[day[field].notna() & day[field].gt(0)]
         return {str(k): float(v) for k, v in zip(day["ts_code"], day[field])}
 
+    def up_limits(self, trade_date: str) -> dict[str, float]:
+        limits = self.read("limits.parquet")
+        if limits.empty or not {"trade_date", "ts_code", "up_limit"}.issubset(limits.columns):
+            return {}
+        dates = _as_date(limits["trade_date"])
+        day = limits.loc[
+            dates.eq(pd.Timestamp(trade_date).normalize()), ["ts_code", "up_limit"]
+        ]
+        day = day[day["up_limit"].notna() & day["up_limit"].gt(0)]
+        return {str(k): float(v) for k, v in zip(day["ts_code"], day["up_limit"])}
+
     def corporate_actions(self) -> pd.DataFrame:
         return self.read("dividend.parquet")
 

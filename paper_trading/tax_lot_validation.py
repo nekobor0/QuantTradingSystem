@@ -75,6 +75,7 @@ class ComponentResult:
     order_count: int
     average_holdings: float
     sales: SaleAudit
+    blocked_buy_count: int = 0
 
 
 def _position_schedule(
@@ -135,7 +136,12 @@ def _tax_aware_component(
     close_lookup: dict[tuple[str, pd.Timestamp], float],
     dividend_events: pd.DataFrame,
     position_frequency: str = "daily",
+    buy_price_mode: str = "open",
+    blocked_buys: set[tuple[str, pd.Timestamp]] | None = None,
 ) -> ComponentResult:
+    if buy_price_mode not in {"open", "open_close_average"}:
+        raise ValueError(f"unsupported buy price mode: {buy_price_mode}")
+    blocked_buys = blocked_buys or set()
     calendar_index = {pd.Timestamp(value): idx for idx, value in enumerate(calendar)}
     gross = np.zeros(len(calendar), dtype=float)
     holdings_count = np.zeros(len(calendar), dtype=float)
@@ -146,6 +152,7 @@ def _tax_aware_component(
     accrued_yield: dict[str, float] = {}
     last_entry: pd.Timestamp | None = None
     audit = SaleAudit()
+    blocked_buy_count = 0
 
     for _, month in signal.groupby("signal_date", sort=True):
         ranked = _ranked(month, factor, ascending)
@@ -184,6 +191,15 @@ def _tax_aware_component(
 
         weight = 1.0 / len(selected_symbols)
         current = {symbol: weight for symbol in selected_symbols}
+        if buy_price_mode == "open_close_average":
+            for symbol, target_weight in list(current.items()):
+                previous_weight = previous.get(symbol, 0.0)
+                if target_weight > previous_weight + 1e-12 and (symbol, entry) in blocked_buys:
+                    blocked_buy_count += 1
+                    if previous_weight > 0:
+                        current[symbol] = min(target_weight, previous_weight)
+                    else:
+                        current.pop(symbol)
         sells = {symbol: previous[symbol] - current.get(symbol, 0.0) for symbol in previous if previous[symbol] > current.get(symbol, 0.0) + 1e-12}
         buys = {symbol: current[symbol] - previous.get(symbol, 0.0) for symbol in current if current[symbol] > previous.get(symbol, 0.0) + 1e-12}
         events[entry_index] = (buys, sells)
@@ -200,13 +216,17 @@ def _tax_aware_component(
 
         last_entry = entry
         holdings_count[entry_index:exit_index] = len(current)
-        for symbol in current:
+        for symbol, current_weight in current.items():
             values = arrays.get(symbol)
             if values is None:
                 continue
-            gross[entry_index] += weight * values["r_oc"][entry_index]
-            gross[exit_index] += weight * values["r_co"][exit_index]
-            gross[entry_index + 1:exit_index] += weight * values["r_cc"][entry_index + 1:exit_index]
+            retained_weight = min(previous.get(symbol, 0.0), current_weight)
+            bought_weight = current_weight - retained_weight
+            buy_return_field = "r_ac" if buy_price_mode == "open_close_average" else "r_oc"
+            gross[entry_index] += retained_weight * values["r_oc"][entry_index]
+            gross[entry_index] += bought_weight * values[buy_return_field][entry_index]
+            gross[exit_index] += current_weight * values["r_co"][exit_index]
+            gross[entry_index + 1:exit_index] += current_weight * values["r_cc"][entry_index + 1:exit_index]
         previous = current
 
     gross_series = pd.Series(gross, index=pd.to_datetime(calendar))
@@ -256,7 +276,7 @@ def _tax_aware_component(
     result = pd.Series(output, index=pd.to_datetime(calendar))
     result = result[result.index >= start]
     average_holdings = float(pd.Series(holdings_count, index=pd.to_datetime(calendar)).loc[result.index].replace(0, np.nan).mean())
-    return ComponentResult(result, total_turnover, order_count, average_holdings, audit)
+    return ComponentResult(result, total_turnover, order_count, average_holdings, audit, blocked_buy_count)
 
 
 def run(

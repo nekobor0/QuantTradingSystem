@@ -12,7 +12,7 @@
 - A/B 共用同一套候选筛选和交易规则，但资金、现金、整手取整、最低佣金、FIFO lot、税费、计划和成交记录完全独立。
 - 每日扫描 A/B 四个分仓。红利和波动组的股票成分按月更新；波动分仓的组合层目标仓位按 60 日波动率和 250 日趋势每日复算，变化达到 1% 才交易。
 - 非月末成分变化只作为观察名单，不是拟买卖指令。执行端读取交易所开市日历，仅在月度成分触发或波动仓日频仓位阈值触发后生成下一交易日计划。
-- 收盘后产生目标计划，下一交易日开盘撮合，不允许同收盘价成交。
+- 收盘后产生目标计划；下一交易日卖出按开盘价，买入按开盘价与收盘价均值；收盘封官方涨停价的拟买标的跳过并保留现金。
 - A 股按 100 股整手交易；佣金万 1.2、单笔最低 5 元；卖出印花税在 2023-08-28 前为千 1、之后为万 5。
 - 现金分红在股权登记日确认权利、派息日入账；卖出时按 FIFO 结算红利税。持有期按自然月/自然年计算：1 个月以内 20%，超过 1 个月至 1 年 10%，超过 1 年免税。
 - 月末成分调仓按交易所日历判断；缺失开盘价时保留原持仓与待执行计划，不以零价删除。
@@ -66,6 +66,7 @@ P2 不改变策略或交易管线，只累计运行完整性、四分仓外部�
 python -m pytest -q tests/paper_trading
 python -m paper_trading.p1_validation --data-root <research-data-path>
 python -m paper_trading.frequency_validation --data-root <research-data-path> --dividend-history paper_trading/data/dividend_history_tushare.parquet
+python -m paper_trading.execution_price_validation --data-root <research-data-path> --dividend-history paper_trading/data/dividend_history_tushare.parquet --limit-path <stk_limit_full.parquet>
 ```
 
-P1 的结果和限制见 `P1_VALIDATION.md` 与 `p1_results.json`；红利税和持有约束实验见 `TAX_LOT_VALIDATION.md`；频率对照和选型见 `FREQUENCY_VALIDATION.md`。
+P1 的结果和限制见 `P1_VALIDATION.md` 与 `p1_results.json`；红利税和持有约束实验见 `TAX_LOT_VALIDATION.md`；频率对照和选型见 `FREQUENCY_VALIDATION.md`；成交价格对照见 `EXECUTION_PRICE_VALIDATION.md`。

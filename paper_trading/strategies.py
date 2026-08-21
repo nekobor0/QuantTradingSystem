@@ -182,7 +182,7 @@ def scan(state: PaperState, store: DataStore, trade_date: str) -> dict:
             "voltrend_constituents": VOLTREND_CONSTITUENT_FREQUENCY,
             "voltrend_position": VOLTREND_POSITION_FREQUENCY,
             "position_threshold": POSITION_REBALANCE_THRESHOLD,
-            "execution_price": "next_trading_day_open",
+            "execution_price": "next_day_sell_open_buy_open_close_average_exclude_limit_up",
         },
         "strategies": strategy_scans,
         "note": (

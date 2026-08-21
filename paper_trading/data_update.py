@@ -70,16 +70,31 @@ def latest_available_trade_date(pro, requested_date: str, calendar: pd.DataFrame
     raise RuntimeError("No completed trading day was available in the last ten open sessions")
 
 
-def _existing_quote_dates() -> set[str]:
-    path = DATA_DIR / "quotes.parquet"
+def _existing_dates(name: str) -> set[str]:
+    path = DATA_DIR / name
     if not path.exists():
         return set()
-    quotes = pd.read_parquet(path, columns=["trade_date"])
-    return set(pd.to_datetime(quotes["trade_date"]).dt.strftime("%Y%m%d"))
+    frame = pd.read_parquet(path, columns=["trade_date"])
+    return set(pd.to_datetime(frame["trade_date"]).dt.strftime("%Y%m%d"))
 
 
-def _required_quote_dates(open_days: list[str], existing: set[str]) -> list[str]:
-    return [trade_date for trade_date in open_days[-WARMUP_DAYS:] if trade_date not in existing]
+def _existing_quote_dates() -> set[str]:
+    return _existing_dates("quotes.parquet")
+
+
+def _existing_limit_dates() -> set[str]:
+    return _existing_dates("limits.parquet")
+
+
+def _required_quote_dates(
+    open_days: list[str], existing: set[str], existing_limits: set[str] | None = None
+) -> list[str]:
+    return [
+        trade_date
+        for trade_date in open_days[-WARMUP_DAYS:]
+        if trade_date not in existing
+        or (existing_limits is not None and trade_date not in existing_limits)
+    ]
 
 
 def _fetch_dividend_actions(pro, trade_date: str) -> tuple[pd.DataFrame, list[str]]:
@@ -105,6 +120,15 @@ def _fetch_day(pro, trade_date: str) -> dict[str, Any]:
     quotes["trade_date"] = pd.to_datetime(quotes["trade_date"])
     _save(quotes, "quotes.parquet", ["ts_code", "trade_date"])
     result["quotes"] = len(quotes)
+
+    limits = pro.stk_limit(
+        trade_date=trade_date,
+        fields="ts_code,trade_date,pre_close,up_limit,down_limit",
+    )
+    if limits is not None and not limits.empty:
+        limits["trade_date"] = pd.to_datetime(limits["trade_date"])
+        _save(limits, "limits.parquet", ["ts_code", "trade_date"])
+    result["limits"] = 0 if limits is None else len(limits)
 
     valuation = pro.daily_basic(
         trade_date=trade_date,
@@ -147,7 +171,8 @@ def update_all(requested_date: str) -> dict:
 
     open_days = _open_days(calendar, effective)
     existing = _existing_quote_dates()
-    required = _required_quote_dates(open_days, existing)
+    existing_limits = _existing_limit_dates()
+    required = _required_quote_dates(open_days, existing, existing_limits)
     runs: list[dict] = []
     errors: list[dict[str, str]] = []
     for trade_date in required:

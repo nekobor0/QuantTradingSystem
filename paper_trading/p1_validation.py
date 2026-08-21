@@ -60,6 +60,7 @@ def _load(root: Path, start: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame]:
     panel["prev_adj_close"] = panel.groupby("ts_code")["adj_close"].shift(1)
     panel["r_cc"] = panel["adj_close"] / panel["prev_adj_close"] - 1.0
     panel["r_oc"] = panel["adj_close"] / panel["adj_open"] - 1.0
+    panel["r_ac"] = panel["adj_close"] / ((panel["adj_open"] + panel["adj_close"]) / 2.0) - 1.0
     panel["r_co"] = panel["adj_open"] / panel["prev_adj_close"] - 1.0
     return signal, panel
 
@@ -69,7 +70,7 @@ def _arrays(panel: pd.DataFrame, calendar: np.ndarray) -> dict[str, dict[str, np
     for symbol, group in panel.groupby("ts_code", sort=False):
         positions = np.searchsorted(calendar, group["date"].to_numpy())
         values: dict[str, np.ndarray] = {}
-        for field in ("r_cc", "r_oc", "r_co"):
+        for field in ("r_cc", "r_oc", "r_ac", "r_co"):
             arr = np.zeros(len(calendar), dtype=np.float32)
             arr[positions] = group[field].fillna(0.0).to_numpy(dtype=np.float32)
             values[field] = arr

@@ -145,3 +145,71 @@ def test_run_day_queues_next_open_instead_of_same_close_fill(tmp_path: Path) -> 
     assert state.dividend_book.pending_plan is not None
     assert state.dividend_book.pending_plan.execute_date == dates[-1].strftime("%Y-%m-%d")
 
+
+
+def test_realistic_rebalance_sells_at_open_and_buys_at_open_close_average() -> None:
+    book = Book(
+        "voltrend",
+        100.0,
+        lots={"AAA": [Lot.new(100, "2026-01-01", 10.0)]},
+    )
+    book.pending_plan = PendingPlan(
+        "p5",
+        "voltrend",
+        "2026-08-18",
+        "2026-08-19",
+        {"BBB": 1.0},
+        reason="rebalance",
+    )
+    result = execute_pending_plan(
+        book,
+        "2026-08-19",
+        {"AAA": 10.0, "BBB": 8.0},
+        {"AAA": 10.0, "BBB": 12.0},
+        {"AAA": 11.0, "BBB": 13.2},
+    )
+    assert result["status"] == "FILLED"
+    assert result["sell_price_policy"] == "open"
+    assert result["buy_price_policy"] == "open_close_average"
+    assert [(fill.side, fill.price) for fill in book.fills] == [
+        ("SELL", 10.0),
+        ("BUY", 10.0),
+    ]
+    assert book.holdings == {"BBB": 100}
+
+
+def test_realistic_rebalance_skips_close_at_official_limit_up() -> None:
+    book = Book("voltrend", 1_100.0)
+    book.pending_plan = PendingPlan(
+        "p6",
+        "voltrend",
+        "2026-08-18",
+        "2026-08-19",
+        {"BBB": 1.0},
+        reason="rebalance",
+    )
+    result = execute_pending_plan(
+        book,
+        "2026-08-19",
+        {"BBB": 10.0},
+        {"BBB": 11.0},
+        {"BBB": 11.0},
+    )
+    assert result["status"] == "PARTIAL"
+    assert result["fills"] == []
+    assert result["warnings"] == ["limit_up_buy_skipped:BBB"]
+    assert book.cash == 1_100.0
+
+
+def test_realistic_rebalance_blocks_before_trading_when_limit_price_is_missing() -> None:
+    book = Book("voltrend", 1_100.0)
+    book.pending_plan = PendingPlan(
+        "p7", "voltrend", "2026-08-18", "2026-08-19", {"BBB": 1.0}
+    )
+    result = execute_pending_plan(
+        book, "2026-08-19", {"BBB": 10.0}, {"BBB": 10.0}, {}
+    )
+    assert result["status"] == "BLOCKED"
+    assert result["fills"] == []
+    assert book.pending_plan is not None
+
