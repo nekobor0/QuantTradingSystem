@@ -31,11 +31,22 @@ python -m paper_trading.replay_shadow --start 2026-08-17 --end 2026-08-19 --stat
 
 ## 每日操作
 
+Preferred launcher (same as the DeepSeek version):
+
+```powershell
+cd paper_trading
+python app.py
+```
+
+The module form below is also supported, but it must be run from the repository root.
+
 在仓库根目录执行：
 
 ```powershell
 python -m paper_trading.app
 ```
+
+Do not run `python -m paper_trading.app` from inside the `paper_trading` directory; its parent directory is then absent from Python's import path.
 
 打开 `http://127.0.0.1:8000`，按页面编号操作：
 
