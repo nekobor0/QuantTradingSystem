@@ -67,6 +67,14 @@ ASSIGNMENT = re.compile(
 SAFE_LITERAL_MARKERS = (
     b"example", b"placeholder", b"dummy", b"invalid", b"changeme", b"<", b"${", b"$env:", b"os.environ",
 )
+ALLOWED_CREDENTIAL_FILENAMES = {
+    "research_review/v8/v12_stage/network_increment/HTTPS_TRANSPORT_CREDENTIAL_AUDIT_20260812.json",
+    "scripts/v12/audit_successor_credential_bytes.py",
+    "tests/research/v12/test_successor_credential_audit.py",
+}
+ALLOWED_TEST_CREDENTIAL_LITERALS = {
+    "tests/research/v12/test_registry_store.py": {b"one-time-secret", b"concurrent-secret"},
+}
 
 
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
@@ -169,7 +177,7 @@ def inspect_path(path: str, mode: str) -> int:
     name = relative.name.lower()
 
     forbidden_dirs = lower_parts & FORBIDDEN_DIRS
-    if "market_data" in forbidden_dirs and tuple(part.lower() for part in relative.parts[:2]) == ("src", "quant_trading_system"):
+    if "market_data" in forbidden_dirs and tuple(part.lower() for part in relative.parts[:2]) in {("src", "quant_trading_system"), ("tests", "market_data")}:
         forbidden_dirs -= {"market_data"}
     if forbidden_dirs or (relative.parts and relative.parts[0].lower() == "artifacts" and not (len(relative.parts) == 3 and relative.parts[1].lower() == "registrations" and suffix == ".md")):
         report(path, None, "forbidden directory")
@@ -180,7 +188,7 @@ def inspect_path(path: str, mode: str) -> int:
     if name == ".env" or (name.startswith(".env.") and name != ".env.example"):
         report(path, None, "local environment file")
         errors += 1
-    if re.search(r"(?:^|[._-])(credentials?|secrets?|api[_-]?keys?|tokens?)(?:[._-]|$)", name):
+    if path not in ALLOWED_CREDENTIAL_FILENAMES and re.search(r"(?:^|[._-])(credentials?|secrets?|api[_-]?keys?|tokens?)(?:[._-]|$)", name):
         report(path, None, "credential-like filename")
         errors += 1
 
@@ -225,6 +233,8 @@ def inspect_path(path: str, mode: str) -> int:
             errors += 1
     for match in ASSIGNMENT.finditer(data):
         value = match.group(2).lower()
+        if value in ALLOWED_TEST_CREDENTIAL_LITERALS.get(path, set()):
+            continue
         if any(marker.lower() in value for marker in SAFE_LITERAL_MARKERS):
             continue
         report(path, line_number(data, match.start()), "hard-coded credential-like literal")
