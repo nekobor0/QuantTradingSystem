@@ -44,3 +44,7 @@ quant_trading_system = ["py.typed"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+
+[[tool.mypy.overrides]]
+module = ["ruamel", "ruamel.*"]
+ignore_missing_imports = true
