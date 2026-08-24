@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .domain import *
 from .errors import RepositoryConflict
-from .tables import accounts, cash_events, events, fills, ledger_entries, orders, reconciliation_items, reconciliations, snapshots, statement_imports
+from .tables import accounts, cash_events, corporate_cash_actions, events, fills, ledger_entries, orders, position_adjustments, reconciliation_items, reconciliations, snapshots, statement_imports
 
 
 class SqlAlchemyLedgerRepository:
@@ -110,12 +110,40 @@ class SqlAlchemyLedgerRepository:
         except IntegrityError as error:
             raise RepositoryConflict(str(error.orig)) from error
 
+    def find_position_adjustment(self, account_id, external_ref):
+        with self.engine.connect() as connection:
+            row = connection.execute(select(position_adjustments).where(position_adjustments.c.account_id == account_id, position_adjustments.c.external_ref == external_ref)).mappings().one_or_none()
+        return None if row is None else self._position_adjustment(row)
+
+    def record_position_adjustment(self, value, entries, event):
+        try:
+            with self.engine.begin() as connection:
+                connection.execute(insert(position_adjustments).values(**self._position_adjustment_values(value)))
+                connection.execute(insert(ledger_entries), [self._entry_values(entry) for entry in entries])
+                connection.execute(insert(events).values(**self._event_values(event)))
+        except IntegrityError as error:
+            raise RepositoryConflict(str(error.orig)) from error
+
+    def find_corporate_cash_action(self, account_id, external_ref):
+        with self.engine.connect() as connection:
+            row = connection.execute(select(corporate_cash_actions).where(corporate_cash_actions.c.account_id == account_id, corporate_cash_actions.c.external_ref == external_ref)).mappings().one_or_none()
+        return None if row is None else self._corporate_cash_action(row)
+
+    def record_corporate_cash_action(self, value, entries, event):
+        try:
+            with self.engine.begin() as connection:
+                connection.execute(insert(corporate_cash_actions).values(**self._corporate_cash_action_values(value)))
+                connection.execute(insert(ledger_entries), [self._entry_values(entry) for entry in entries])
+                connection.execute(insert(events).values(**self._event_values(event)))
+        except IntegrityError as error:
+            raise RepositoryConflict(str(error.orig)) from error
+
     def save_snapshot(self, value):
         with self.engine.begin() as connection:
             connection.execute(insert(snapshots).values(
                 snapshot_id=value.snapshot_id, account_id=value.account_id, as_of=value.as_of,
                 cash={key: str(amount) for key, amount in value.cash.items()},
-                positions=[{"instrument_id": str(p.instrument_id), "quantity": p.quantity, "sellable_quantity": p.sellable_quantity, "cost": str(p.cost)} for p in value.positions],
+                positions=[{"instrument_id": str(p.instrument_id), "quantity": p.quantity, "sellable_quantity": p.sellable_quantity, "cost": str(p.cost), "lots": [{"lot_id": str(l.lot_id), "buy_date": l.buy_date.isoformat(), "quantity": l.quantity, "sellable_quantity": l.sellable_quantity, "cost": str(l.cost)} for l in p.lots]} for p in value.positions],
                 content_hash=value.content_hash, entry_watermark=[str(x) for x in value.entry_watermark], source=value.source,
             ))
 
@@ -180,9 +208,17 @@ class SqlAlchemyLedgerRepository:
     @classmethod
     def _cash_event(cls, r): return CashEvent(r.account_id, CashEventType(r.event_type), r.currency, Decimal(r.amount), cls._aware(r.effective_at), r.external_ref, r.reason, r.counter_currency, None if r.source_rate is None else Decimal(r.source_rate), r.event_id)
     @staticmethod
-    def _entry_values(x): return {name: (getattr(x, name).value if name == "entry_type" else getattr(x, name)) for name in ("entry_id", "account_id", "entry_type", "currency", "effective_at", "recorded_at", "source_type", "source_id", "instrument_id", "quantity_delta", "cash_delta", "cost_delta", "realized_pnl_delta")}
+    def _entry_values(x): return {name: (getattr(x, name).value if name == "entry_type" else getattr(x, name)) for name in ("entry_id", "account_id", "entry_type", "currency", "effective_at", "recorded_at", "source_type", "source_id", "instrument_id", "quantity_delta", "cash_delta", "cost_delta", "realized_pnl_delta", "lot_id", "buy_date")}
     @classmethod
-    def _entry(cls, r): return LedgerEntry(r.account_id, EntryType(r.entry_type), r.currency, cls._aware(r.effective_at), cls._aware(r.recorded_at), r.source_type, r.source_id, r.instrument_id, r.quantity_delta, Decimal(r.cash_delta), Decimal(r.cost_delta), Decimal(r.realized_pnl_delta), r.entry_id)
+    def _entry(cls, r): return LedgerEntry(r.account_id, EntryType(r.entry_type), r.currency, cls._aware(r.effective_at), cls._aware(r.recorded_at), r.source_type, r.source_id, r.instrument_id, r.quantity_delta, Decimal(r.cash_delta), Decimal(r.cost_delta), Decimal(r.realized_pnl_delta), r.lot_id, r.buy_date, r.entry_id)
+    @staticmethod
+    def _position_adjustment_values(x): return {name: (getattr(x, name).value if name == "action_type" else getattr(x, name)) for name in ("adjustment_id", "account_id", "instrument_id", "lot_id", "buy_date", "action_type", "currency", "quantity_delta", "sellable_quantity_delta", "cost_delta", "effective_at", "available_at", "external_ref", "reason")}
+    @classmethod
+    def _position_adjustment(cls, r): return PositionAdjustment(r.account_id, r.instrument_id, r.lot_id, r.buy_date, CorporateActionType(r.action_type), r.currency, r.quantity_delta, r.sellable_quantity_delta, Decimal(r.cost_delta), cls._aware(r.effective_at), cls._aware(r.available_at), r.external_ref, r.reason, r.adjustment_id)
+    @staticmethod
+    def _corporate_cash_action_values(x): return {name: (getattr(x, name).value if name == "action_type" else getattr(x, name)) for name in ("action_id", "account_id", "instrument_id", "lot_id", "buy_date", "action_type", "currency", "gross_cash", "withholding_tax", "effective_at", "available_at", "external_ref", "reason")}
+    @classmethod
+    def _corporate_cash_action(cls, r): return CorporateCashAction(r.account_id, r.instrument_id, r.lot_id, r.buy_date, CorporateCashActionType(r.action_type), r.currency, Decimal(r.gross_cash), Decimal(r.withholding_tax), cls._aware(r.effective_at), cls._aware(r.available_at), r.external_ref, r.reason, r.action_id)
     @staticmethod
     def _event_values(x): return {"event_id": x.event_id, "event_type": x.event_type, "account_id": x.account_id, "occurred_at": x.occurred_at, "recorded_at": x.recorded_at, "payload": dict(x.payload)}
     @staticmethod

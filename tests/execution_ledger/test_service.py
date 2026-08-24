@@ -61,10 +61,136 @@ def test_buy_fill_updates_order_cash_position_and_delays_sellable(service, funde
     assert at_fill.positions[0].quantity == 100
     assert at_fill.positions[0].sellable_quantity == 0
     assert at_fill.positions[0].cost == Decimal("1005")
+    assert at_fill.positions[0].lots[0].lot_id == recorded.fill_id
+    assert at_fill.positions[0].lots[0].buy_date == T0.date()
+    assert at_fill.positions[0].lots[0].sellable_quantity == 0
     settled = service.get_account_snapshot(funded.account_id, T0 + timedelta(days=1))
     assert settled.positions[0].sellable_quantity == 100
     assert repo.get_order(order.order_id).status is OrderStatus.FILLED
-    assert len([e for e in repo.entry_values if e.source_id == recorded.fill_id]) == 4
+    assert len([e for e in repo.entry_values if e.source_id == recorded.fill_id]) == 6
+
+
+def test_fifo_lots_preserve_buy_date_and_reconcile_to_position(service, funded, instrument_id):
+    first = service.record_order(manual_order(funded, instrument_id, quantity=100, key="b1"))
+    f1 = service.record_fill(first.order_id, fill(fill_id="f1", quantity=100, price="10", commission="0"), 0)
+    second_at = T0 + timedelta(days=2)
+    second = service.record_order(manual_order(funded, instrument_id, quantity=100, key="b2", at=second_at))
+    f2 = service.record_fill(second.order_id, fill(fill_id="f2", quantity=100, price="20", commission="0", at=second_at), 0)
+    sell_at = T0 + timedelta(days=4)
+    sell = service.record_order(manual_order(funded, instrument_id, side=OrderSide.SELL, quantity=120, key="s", at=sell_at))
+    service.record_fill(sell.order_id, fill(fill_id="s1", quantity=120, price="30", commission="0", at=sell_at, settle_days=0), 0)
+
+    position = service.get_account_snapshot(funded.account_id, sell_at).positions[0]
+    assert len(position.lots) == 1
+    assert position.lots[0].lot_id == f2.fill_id
+    assert position.lots[0].buy_date == second_at.date()
+    assert position.lots[0].quantity == position.lots[0].sellable_quantity == 80
+    assert sum(lot.quantity for lot in position.lots) == position.quantity
+    assert sum((lot.cost for lot in position.lots), Decimal()) == position.cost
+
+
+def test_share_action_requires_existing_lot_and_is_idempotent(service, funded, instrument_id):
+    order = service.record_order(manual_order(funded, instrument_id, key="buy"))
+    recorded = service.record_fill(order.order_id, fill(fill_id="buy", settle_days=0), 0)
+    action = PositionAdjustment(
+        funded.account_id, instrument_id, recorded.fill_id, T0.date(), CorporateActionType.SPLIT,
+        "CNY", 100, 100, Decimal("0"), T0 + timedelta(days=2), T0 + timedelta(days=1),
+        "action-1", "two-for-one split",
+    )
+    assert service.record_position_adjustment(action) == action
+    assert service.record_position_adjustment(action) == action
+    position = service.get_account_snapshot(funded.account_id, T0 + timedelta(days=2)).positions[0]
+    assert position.quantity == position.sellable_quantity == 200
+    assert position.cost == position.lots[0].cost == Decimal("1005")
+    with pytest.raises(InvalidLedgerInput, match="existing matching lot"):
+        service.record_position_adjustment(replace(action, adjustment_id=uuid4(), external_ref="bad", lot_id=uuid4()))
+
+
+def test_share_action_fails_closed_when_not_available_by_effective_time(funded, instrument_id):
+    with pytest.raises(InvalidLedgerInput, match="unavailable"):
+        PositionAdjustment(
+            funded.account_id, instrument_id, uuid4(), T0.date(), CorporateActionType.SPLIT,
+            "CNY", 100, 100, Decimal("0"), T0, T0 + timedelta(days=1), "future", "future fact",
+        )
+
+
+def test_share_action_rejects_sellable_above_quantity_before_write(service, funded, instrument_id, repo):
+    order = service.record_order(manual_order(funded, instrument_id, key="buy"))
+    recorded = service.record_fill(order.order_id, fill(fill_id="buy", settle_days=0), 0)
+    action = PositionAdjustment(
+        funded.account_id, instrument_id, recorded.fill_id, T0.date(), CorporateActionType.CANCELLATION,
+        "CNY", -50, 0, Decimal("0"), T0 + timedelta(days=1), T0, "bad-action", "bad instruction",
+    )
+    before = len(repo.entry_values)
+    with pytest.raises(InsufficientBalance, match="sellable exceed"):
+        service.record_position_adjustment(action)
+    assert len(repo.entry_values) == before
+    assert repo.find_position_adjustment(funded.account_id, "bad-action") is None
+
+
+def test_full_cancellation_requires_explicit_cost_release(service, funded, instrument_id):
+    order = service.record_order(manual_order(funded, instrument_id, key="buy"))
+    recorded = service.record_fill(order.order_id, fill(fill_id="buy", settle_days=0), 0)
+    incomplete = PositionAdjustment(
+        funded.account_id, instrument_id, recorded.fill_id, T0.date(), CorporateActionType.CANCELLATION,
+        "CNY", -100, -100, Decimal("0"), T0 + timedelta(days=1), T0, "cancel-bad", "missing cost instruction",
+    )
+    with pytest.raises(InsufficientBalance, match="closed lot"):
+        service.record_position_adjustment(incomplete)
+    complete = replace(incomplete, adjustment_id=uuid4(), external_ref="cancel-good", cost_delta=Decimal("-1005"))
+    service.record_position_adjustment(complete)
+    assert service.get_account_snapshot(funded.account_id, T0 + timedelta(days=1)).positions == ()
+
+
+def test_cash_dividend_is_net_atomic_idempotent_and_keeps_lot(service, funded, instrument_id, repo):
+    order = service.record_order(manual_order(funded, instrument_id, key="div-buy"))
+    recorded = service.record_fill(order.order_id, fill(fill_id="div-buy", settle_days=0), 0)
+    action = CorporateCashAction(
+        funded.account_id, instrument_id, recorded.fill_id, T0.date(), CorporateCashActionType.CASH_DIVIDEND,
+        "CNY", Decimal("100"), Decimal("10"), T0 + timedelta(days=2), T0 + timedelta(days=1),
+        "dividend-1", "tax-withheld cash dividend",
+    )
+    before = service.get_account_snapshot(funded.account_id, T0 + timedelta(days=2))
+    assert service.record_corporate_cash_action(action) == action
+    assert service.record_corporate_cash_action(action) == action
+    after = service.get_account_snapshot(funded.account_id, T0 + timedelta(days=2))
+    assert after.cash["CNY"] - before.cash["CNY"] == Decimal("90")
+    assert after.positions == before.positions
+    action_entries = [entry for entry in repo.entry_values if entry.source_id == action.action_id]
+    assert [entry.cash_delta for entry in action_entries] == [Decimal("100"), Decimal("-10")]
+    assert len(repo.corporate_cash_actions) == 1
+
+
+def test_delisting_cash_disposal_closes_lot_and_records_realized_pnl(service, funded, instrument_id, repo):
+    order = service.record_order(manual_order(funded, instrument_id, key="delist-buy"))
+    recorded = service.record_fill(order.order_id, fill(fill_id="delist-buy", settle_days=0), 0)
+    action = CorporateCashAction(
+        funded.account_id, instrument_id, recorded.fill_id, T0.date(), CorporateCashActionType.DELISTING_CASH_DISPOSAL,
+        "CNY", Decimal("800"), Decimal("0"), T0 + timedelta(days=2), T0 + timedelta(days=1),
+        "delist-1", "cash disposal on delisting",
+    )
+    before_cash = service.get_account_snapshot(funded.account_id, T0 + timedelta(days=2)).cash["CNY"]
+    service.record_corporate_cash_action(action)
+    after = service.get_account_snapshot(funded.account_id, T0 + timedelta(days=2))
+    assert after.cash["CNY"] - before_cash == Decimal("800")
+    assert after.positions == ()
+    assert sum(entry.realized_pnl_delta for entry in repo.entry_values if entry.source_id == action.action_id) == Decimal("-205")
+
+
+def test_corporate_cash_action_fails_before_write_for_missing_lot_or_future_fact(service, funded, instrument_id, repo):
+    with pytest.raises(InvalidLedgerInput, match="unavailable"):
+        CorporateCashAction(
+            funded.account_id, instrument_id, uuid4(), T0.date(), CorporateCashActionType.CASH_DIVIDEND,
+            "CNY", Decimal("10"), Decimal("0"), T0, T0 + timedelta(days=1), "future-div", "future fact",
+        )
+    action = CorporateCashAction(
+        funded.account_id, instrument_id, uuid4(), T0.date(), CorporateCashActionType.CASH_DIVIDEND,
+        "CNY", Decimal("10"), Decimal("0"), T0, T0, "missing-lot", "missing lot",
+    )
+    before = len(repo.entry_values)
+    with pytest.raises(InvalidLedgerInput, match="existing matching lot"):
+        service.record_corporate_cash_action(action)
+    assert len(repo.entry_values) == before and not repo.corporate_cash_actions
 
 
 def test_two_partial_fills_progress_status_and_average_cost(service, funded, instrument_id, repo):

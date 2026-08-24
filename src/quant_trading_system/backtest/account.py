@@ -8,6 +8,7 @@ from uuid import UUID
 
 from .domain import BacktestPosition, BacktestSnapshot, LedgerKind, MarketRule, Side, SimFill, SimLedgerEntry
 from .errors import SimulationInvariantError
+from quant_trading_system.portfolio.ledger_kernel import calculate_fill_accounting
 
 
 class SimulationAccount:
@@ -16,6 +17,7 @@ class SimulationAccount:
         self.cash = Decimal(initial_cash)
         self.quantities: dict[UUID, int] = {}
         self.sellable: dict[UUID, int] = {}
+        self.costs: dict[UUID, Decimal] = {}
         self.pending_settlement: list[tuple[datetime, UUID, int, UUID]] = []
         self.ledger: list[SimLedgerEntry] = []
         self.total_fees = Decimal()
@@ -33,24 +35,35 @@ class SimulationAccount:
         return tuple(entries)
 
     def apply_fill(self, fill: SimFill, rule: MarketRule) -> tuple[SimLedgerEntry, ...]:
-        total_fee = fill.commission + fill.tax + fill.platform_fee
+        current_quantity = self.quantities.get(fill.instrument_id, 0)
+        current_cost = self.costs.get(fill.instrument_id, Decimal())
+        if fill.side is Side.SELL and (
+            current_quantity < fill.quantity
+            or self.sellable.get(fill.instrument_id, 0) < fill.quantity
+        ):
+            raise SimulationInvariantError("insufficient simulated sellable position")
+        delta = calculate_fill_accounting(
+            side=fill.side, quantity=fill.quantity, price=fill.price,
+            commission=fill.commission, tax=fill.tax, other_fee=fill.platform_fee,
+            current_quantity=current_quantity, current_cost=current_cost,
+        )
+        total_fee = delta.fee
         if fill.side is Side.BUY:
-            cash_delta = -(fill.gross + total_fee)
+            cash_delta = delta.cash_delta
             if self.cash + cash_delta < 0:
                 raise SimulationInvariantError("insufficient simulated cash")
-            quantity_delta = fill.quantity
+            quantity_delta = delta.quantity_delta
             self.quantities[fill.instrument_id] = self.quantities.get(fill.instrument_id, 0) + fill.quantity
             if rule.settlement_days == 0:
                 self.sellable[fill.instrument_id] = self.sellable.get(fill.instrument_id, 0) + fill.quantity
             else:
                 self.pending_settlement.append((fill.filled_at + timedelta(days=rule.settlement_days), fill.instrument_id, fill.quantity, fill.fill_id))
         else:
-            if self.quantities.get(fill.instrument_id, 0) < fill.quantity or self.sellable.get(fill.instrument_id, 0) < fill.quantity:
-                raise SimulationInvariantError("insufficient simulated sellable position")
-            cash_delta = fill.gross - total_fee
-            quantity_delta = -fill.quantity
+            cash_delta = delta.cash_delta
+            quantity_delta = delta.quantity_delta
             self.quantities[fill.instrument_id] -= fill.quantity
             self.sellable[fill.instrument_id] -= fill.quantity
+        self.costs[fill.instrument_id] = current_cost + delta.cost_delta
         self.cash += cash_delta
         self.total_fees += total_fee
         entries = [
@@ -88,6 +101,5 @@ class SimulationAccount:
         return BacktestSnapshot(self.run_id, as_of, self.cash, positions, nav, sleeve_exposure, content_hash)
 
     def _assert_nonnegative(self):
-        if self.cash < 0 or any(value < 0 for value in self.quantities.values()) or any(value < 0 for value in self.sellable.values()):
+        if self.cash < 0 or any(value < 0 for value in self.quantities.values()) or any(value < 0 for value in self.sellable.values()) or any(value < 0 for value in self.costs.values()):
             raise SimulationInvariantError("negative simulated balance")
-

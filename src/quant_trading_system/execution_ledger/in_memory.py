@@ -1,5 +1,5 @@
 class InMemoryLedgerRepository:
- def __init__(self):self.accounts={};self.orders={};self.order_keys={};self.fills={};self.fill_keys={};self.entry_values=[];self.cash_events={};self.snapshots={};self.reconciliations={};self.imports={};self.events=[]
+ def __init__(self):self.accounts={};self.orders={};self.order_keys={};self.fills={};self.fill_keys={};self.entry_values=[];self.cash_events={};self.position_adjustments={};self.corporate_cash_actions={};self.snapshots={};self.reconciliations={};self.imports={};self.events=[]
  def save_account(self,a):self.accounts[a.account_id]=a
  def get_account(self,i):return self.accounts.get(i)
  def update_account(self,a):self.accounts[a.account_id]=a
@@ -14,6 +14,10 @@ class InMemoryLedgerRepository:
  def entries(self,a):return tuple(x for x in self.entry_values if x.account_id==a)
  def find_cash_event(self,a,r):return self.cash_events.get((a,r))
  def record_cash(self,v,e,event):self.cash_events[(v.account_id,v.external_ref)]=v;self.entry_values.append(e);self.events.append(event)
+ def find_position_adjustment(self,a,r):return self.position_adjustments.get((a,r))
+ def record_position_adjustment(self,v,entries,event):self.position_adjustments[(v.account_id,v.external_ref)]=v;self.entry_values.extend(entries);self.events.append(event)
+ def find_corporate_cash_action(self,a,r):return self.corporate_cash_actions.get((a,r))
+ def record_corporate_cash_action(self,v,entries,event):self.corporate_cash_actions[(v.account_id,v.external_ref)]=v;self.entry_values.extend(entries);self.events.append(event)
  def save_snapshot(self,s):self.snapshots[s.snapshot_id]=s
  def save_reconciliation(self,r,a,event):self.reconciliations[r.reconciliation_id]=r;self.accounts[a.account_id]=a;self.events.append(event)
  def get_reconciliation(self,i):return self.reconciliations.get(i)

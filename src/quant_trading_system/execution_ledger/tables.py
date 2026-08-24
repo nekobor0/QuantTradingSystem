@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, JSON, MetaData, Numeric, String, Table, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, JSON, MetaData, Numeric, String, Table, UniqueConstraint
 from sqlalchemy.types import Uuid
 
 metadata = MetaData()
@@ -46,6 +46,26 @@ ledger_entries = Table(
     Column("source_type", String, nullable=False), Column("source_id", Uuid, nullable=False), Column("instrument_id", Uuid),
     Column("quantity_delta", Integer, nullable=False), Column("cash_delta", Numeric, nullable=False), Column("cost_delta", Numeric, nullable=False),
     Column("realized_pnl_delta", Numeric, nullable=False),
+    Column("lot_id", Uuid), Column("buy_date", Date),
+)
+position_adjustments = Table(
+    "execution_position_adjustments", metadata,
+    Column("adjustment_id", Uuid, primary_key=True), Column("account_id", Uuid, ForeignKey("execution_accounts.account_id"), nullable=False),
+    Column("instrument_id", Uuid, nullable=False), Column("lot_id", Uuid, nullable=False), Column("buy_date", Date, nullable=False),
+    Column("action_type", String, nullable=False), Column("currency", String(3), nullable=False), Column("quantity_delta", Integer, nullable=False),
+    Column("sellable_quantity_delta", Integer, nullable=False), Column("cost_delta", Numeric, nullable=False),
+    Column("effective_at", DateTime(timezone=True), nullable=False), Column("available_at", DateTime(timezone=True), nullable=False),
+    Column("external_ref", String, nullable=False), Column("reason", String, nullable=False), UniqueConstraint("account_id", "external_ref"),
+)
+corporate_cash_actions = Table(
+    "execution_corporate_cash_actions", metadata,
+    Column("action_id", Uuid, primary_key=True), Column("account_id", Uuid, ForeignKey("execution_accounts.account_id"), nullable=False),
+    Column("instrument_id", Uuid, nullable=False), Column("lot_id", Uuid, nullable=False), Column("buy_date", Date, nullable=False),
+    Column("action_type", String, nullable=False), Column("currency", String(3), nullable=False), Column("gross_cash", Numeric, nullable=False),
+    Column("withholding_tax", Numeric, nullable=False), Column("effective_at", DateTime(timezone=True), nullable=False),
+    Column("available_at", DateTime(timezone=True), nullable=False), Column("external_ref", String, nullable=False), Column("reason", String, nullable=False),
+    UniqueConstraint("account_id", "external_ref"), CheckConstraint("gross_cash > 0"),
+    CheckConstraint("withholding_tax >= 0 AND withholding_tax < gross_cash"), CheckConstraint("available_at <= effective_at"),
 )
 snapshots = Table(
     "execution_account_snapshots", metadata,

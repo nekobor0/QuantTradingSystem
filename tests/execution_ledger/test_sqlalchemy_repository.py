@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, select
 
 from quant_trading_system.execution_ledger import *
 from quant_trading_system.execution_ledger.sqlalchemy_repository import SqlAlchemyLedgerRepository
-from quant_trading_system.execution_ledger.tables import accounts, fills, ledger_entries, metadata, orders
+from quant_trading_system.execution_ledger.tables import accounts, corporate_cash_actions, fills, ledger_entries, metadata, orders, position_adjustments
 
 from .conftest import T0, fill, manual_order
 
@@ -50,7 +50,7 @@ def test_sql_fill_and_entries_are_atomic_roundtrip(sql_service, sql_repo):
     order = sql_service.record_order(manual_order(account, instrument))
     recorded = sql_service.record_fill(order.order_id, fill(settle_days=0), 0)
     assert sql_repo.get_fill(recorded.fill_id) == recorded
-    assert len(sql_repo.entries(account.account_id)) == 5
+    assert len(sql_repo.entries(account.account_id)) == 7
     assert sql_service.get_account_snapshot(account.account_id, T0).positions[0].quantity == 100
 
 
@@ -59,7 +59,29 @@ def test_sql_duplicate_fill_is_idempotent(sql_service, sql_repo):
     order = sql_service.record_order(manual_order(account, __import__("uuid").uuid4()))
     first = sql_service.record_fill(order.order_id, fill(), 0)
     assert sql_service.record_fill(order.order_id, fill(), 1) == first
-    assert len(sql_repo.entries(account.account_id)) == 5
+    assert len(sql_repo.entries(account.account_id)) == 7
+
+
+def test_sql_position_adjustment_roundtrip(sql_service, sql_repo):
+    account = sql_funded(sql_service)
+    instrument = __import__("uuid").uuid4()
+    order = sql_service.record_order(manual_order(account, instrument))
+    recorded = sql_service.record_fill(order.order_id, fill(settle_days=0), 0)
+    action = PositionAdjustment(account.account_id, instrument, recorded.fill_id, T0.date(), CorporateActionType.SPLIT, "CNY", 100, 100, Decimal("0"), T0, T0, "split", "test")
+    sql_service.record_position_adjustment(action)
+    assert sql_repo.find_position_adjustment(account.account_id, "split") == action
+    assert sql_service.get_account_snapshot(account.account_id, T0).positions[0].quantity == 200
+
+
+def test_sql_corporate_cash_action_roundtrip_and_atomic_entries(sql_service, sql_repo):
+    account = sql_funded(sql_service)
+    instrument = __import__("uuid").uuid4()
+    order = sql_service.record_order(manual_order(account, instrument))
+    recorded = sql_service.record_fill(order.order_id, fill(settle_days=0), 0)
+    action = CorporateCashAction(account.account_id, instrument, recorded.fill_id, T0.date(), CorporateCashActionType.CASH_DIVIDEND, "CNY", Decimal("20"), Decimal("2"), T0, T0, "cash-action", "test")
+    sql_service.record_corporate_cash_action(action)
+    assert sql_repo.find_corporate_cash_action(account.account_id, "cash-action") == action
+    assert sql_service.get_account_snapshot(account.account_id, T0).cash["CNY"] == Decimal("99013")
 
 
 def test_sql_reversal_roundtrip(sql_service, sql_repo):
@@ -94,7 +116,7 @@ def test_sql_latest_event(sql_service, sql_repo):
     assert sql_repo.latest_event().account_id == account.account_id
 
 
-@pytest.mark.parametrize("table", [accounts, orders, fills, ledger_entries])
+@pytest.mark.parametrize("table", [accounts, orders, fills, ledger_entries, position_adjustments, corporate_cash_actions])
 def test_sql_owned_tables_exist(sql_repo, table):
     with sql_repo.engine.connect() as connection:
         connection.execute(select(table).limit(1)).all()

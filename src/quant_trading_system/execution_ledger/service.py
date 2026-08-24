@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Mapping
 from uuid import UUID, uuid4
+
+from quant_trading_system.portfolio.ledger_kernel import calculate_fill_accounting
 
 from .domain import (
     Account,
@@ -25,6 +27,10 @@ from .domain import (
     OrderSource,
     OrderStatus,
     PositionSnapshot,
+    PositionLotSnapshot,
+    PositionAdjustment,
+    CorporateCashAction,
+    CorporateCashActionType,
     Reconciliation,
     ReconciliationItem,
     ReconciliationStatus,
@@ -146,7 +152,7 @@ class ExecutionLedgerService:
             sellable_on=value.sellable_on,
             payload_hash=payload_hash,
         )
-        entries = self._fill_entries(fill, order.side, quantity, cost)
+        entries = self._fill_entries(fill, order.side, current)
         status = OrderStatus.FILLED if new_filled == order.quantity else OrderStatus.PARTIALLY_FILLED
         updated = replace(order, filled_quantity=new_filled, status=status, version=order.version + 1)
         self.repository.record_fill(
@@ -227,6 +233,10 @@ class ExecutionLedgerService:
         position: dict[UUID, int] = {}
         sellable: dict[UUID, int] = {}
         cost: dict[UUID, Decimal] = {}
+        lot_position: dict[UUID, int] = {}
+        lot_sellable: dict[UUID, int] = {}
+        lot_cost: dict[UUID, Decimal] = {}
+        lot_meta: dict[UUID, tuple[UUID, date]] = {}
         for entry in included:
             if entry.entry_type is EntryType.CASH:
                 cash[entry.currency] = cash.get(entry.currency, Decimal()) + entry.cash_delta
@@ -235,19 +245,105 @@ class ExecutionLedgerService:
                 cost[entry.instrument_id] = cost.get(entry.instrument_id, Decimal()) + entry.cost_delta
             elif entry.entry_type is EntryType.SETTLEMENT and entry.instrument_id is not None:
                 sellable[entry.instrument_id] = sellable.get(entry.instrument_id, 0) + entry.quantity_delta
+            elif entry.entry_type is EntryType.LOT_POSITION and entry.instrument_id is not None and entry.lot_id is not None and entry.buy_date is not None:
+                lot_position[entry.lot_id] = lot_position.get(entry.lot_id, 0) + entry.quantity_delta
+                lot_cost[entry.lot_id] = lot_cost.get(entry.lot_id, Decimal()) + entry.cost_delta
+                lot_meta[entry.lot_id] = (entry.instrument_id, entry.buy_date)
+            elif entry.entry_type is EntryType.LOT_SETTLEMENT and entry.lot_id is not None:
+                lot_sellable[entry.lot_id] = lot_sellable.get(entry.lot_id, 0) + entry.quantity_delta
         if any(v < 0 for v in cash.values()) or any(v < 0 for v in position.values()) or any(v < 0 for v in sellable.values()):
             raise InsufficientBalance("ledger produces a negative balance")
         ids = tuple(e.entry_id for e in included)
+        lots_by_instrument: dict[UUID, list[PositionLotSnapshot]] = {}
+        for lot_id, quantity in lot_position.items():
+            if quantity == 0:
+                continue
+            instrument_id, buy_date = lot_meta[lot_id]
+            lot = PositionLotSnapshot(lot_id, instrument_id, buy_date, quantity, lot_sellable.get(lot_id, 0), lot_cost.get(lot_id, Decimal()))
+            lots_by_instrument.setdefault(instrument_id, []).append(lot)
+        if any(v < 0 for v in lot_position.values()) or any(v < 0 for v in lot_sellable.values()) or any(v < 0 for v in lot_cost.values()):
+            raise InsufficientBalance("ledger produces a negative lot balance")
+        if any(lot_sellable.get(lot_id, 0) > quantity for lot_id, quantity in lot_position.items()):
+            raise InsufficientBalance("lot sellable quantity exceeds position quantity")
         positions = tuple(
-            PositionSnapshot(i, q, sellable.get(i, 0), cost.get(i, Decimal()))
+            PositionSnapshot(i, q, sellable.get(i, 0), cost.get(i, Decimal()), tuple(sorted(lots_by_instrument.get(i, []), key=lambda lot: (lot.buy_date, str(lot.lot_id)))))
             for i, q in sorted(position.items(), key=lambda item: str(item[0]))
             if q != 0
         )
+        for value in positions:
+            if sum(lot.quantity for lot in value.lots) != value.quantity or sum(lot.sellable_quantity for lot in value.lots) != value.sellable_quantity or sum((lot.cost for lot in value.lots), Decimal()) != value.cost:
+                raise InsufficientBalance("position and lot ledger do not reconcile")
         content_hash = self._hash({"entries": [str(i) for i in ids], "as_of": point.isoformat()})
         result = AccountSnapshot(account_id, point, dict(sorted(cash.items())), positions, content_hash, ids)
         if persist:
             self.repository.save_snapshot(result)
         return result
+
+    def record_position_adjustment(self, value: PositionAdjustment) -> PositionAdjustment:
+        self._account(value.account_id)
+        existing = self.repository.find_position_adjustment(value.account_id, value.external_ref)
+        if existing is not None:
+            if existing != value:
+                raise FillConflict("position adjustment reference reused with different content")
+            return existing
+        before = self.get_account_snapshot(value.account_id, value.effective_at, persist=False)
+        position = next((item for item in before.positions if item.instrument_id == value.instrument_id), None)
+        lot = next((item for item in (position.lots if position else ()) if item.lot_id == value.lot_id), None)
+        if lot is None or lot.buy_date != value.buy_date:
+            raise InvalidLedgerInput("position adjustment requires an existing matching lot")
+        adjusted_quantity = lot.quantity + value.quantity_delta
+        adjusted_sellable = lot.sellable_quantity + value.sellable_quantity_delta
+        adjusted_cost = lot.cost + value.cost_delta
+        if adjusted_quantity < 0 or adjusted_sellable < 0 or adjusted_cost < 0:
+            raise InsufficientBalance("position adjustment makes lot negative")
+        if adjusted_sellable > adjusted_quantity:
+            raise InsufficientBalance("position adjustment makes sellable exceed quantity")
+        if adjusted_quantity == 0 and (adjusted_sellable != 0 or adjusted_cost != 0):
+            raise InsufficientBalance("closed lot must have zero sellable quantity and cost")
+        now = datetime.now(timezone.utc)
+        def item(entry_type, quantity_delta, cost_delta=Decimal()):
+            return LedgerEntry(value.account_id, entry_type, value.currency, value.effective_at, now, "CORPORATE_ACTION", value.adjustment_id, value.instrument_id, quantity_delta, cost_delta=cost_delta, lot_id=value.lot_id, buy_date=value.buy_date)
+        entries = (
+            item(EntryType.POSITION, value.quantity_delta, value.cost_delta),
+            item(EntryType.SETTLEMENT, value.sellable_quantity_delta),
+            item(EntryType.LOT_POSITION, value.quantity_delta, value.cost_delta),
+            item(EntryType.LOT_SETTLEMENT, value.sellable_quantity_delta),
+        )
+        self.repository.record_position_adjustment(value, entries, self._event("PositionAdjusted", value.account_id, value.effective_at, {"adjustment_id": str(value.adjustment_id), "action_type": value.action_type.value}))
+        self.get_account_snapshot(value.account_id, value.effective_at, persist=False)
+        return value
+
+    def record_corporate_cash_action(self, value: CorporateCashAction) -> CorporateCashAction:
+        self._account(value.account_id)
+        existing = self.repository.find_corporate_cash_action(value.account_id, value.external_ref)
+        if existing is not None:
+            if existing != value:
+                raise FillConflict("corporate cash action reference reused with different content")
+            return existing
+        before = self.get_account_snapshot(value.account_id, value.effective_at, persist=False)
+        position = next((item for item in before.positions if item.instrument_id == value.instrument_id), None)
+        lot = next((item for item in (position.lots if position else ()) if item.lot_id == value.lot_id), None)
+        if lot is None or lot.buy_date != value.buy_date:
+            raise InvalidLedgerInput("corporate cash action requires an existing matching lot")
+        now = datetime.now(timezone.utc)
+        def entry(entry_type, *, quantity=0, cash=Decimal(), cost=Decimal(), realized=Decimal()):
+            return LedgerEntry(value.account_id, entry_type, value.currency, value.effective_at, now, "CORPORATE_CASH_ACTION", value.action_id, value.instrument_id, quantity, cash, cost, realized, value.lot_id, value.buy_date)
+        entries = [entry(EntryType.CASH, cash=value.gross_cash)]
+        if value.withholding_tax:
+            entries.append(entry(EntryType.CASH, cash=-value.withholding_tax))
+        if value.action_type is CorporateCashActionType.DELISTING_CASH_DISPOSAL:
+            entries.extend((
+                entry(EntryType.POSITION, quantity=-lot.quantity, cost=-lot.cost),
+                entry(EntryType.SETTLEMENT, quantity=-lot.sellable_quantity),
+                entry(EntryType.LOT_POSITION, quantity=-lot.quantity, cost=-lot.cost),
+                entry(EntryType.LOT_SETTLEMENT, quantity=-lot.sellable_quantity),
+                entry(EntryType.REALIZED_PNL, realized=value.net_cash - lot.cost),
+            ))
+        self.repository.record_corporate_cash_action(
+            value, tuple(entries), self._event("CorporateCashActionRecorded", value.account_id, value.effective_at, {"action_id": str(value.action_id), "action_type": value.action_type.value})
+        )
+        self.get_account_snapshot(value.account_id, value.effective_at, persist=False)
+        return value
 
     def reverse_fill(self, fill_id: UUID, reversal_at: datetime, expected_version: int, reason: str) -> Fill:
         original = self.repository.get_fill(fill_id)
@@ -368,16 +464,14 @@ class ExecutionLedgerService:
         self.repository.save_import(updated)
         return updated
 
-    def _fill_entries(self, fill: Fill, side: OrderSide, current_quantity: int, current_cost: Decimal) -> tuple[LedgerEntry, ...]:
-        gross = fill.price * fill.quantity
-        if side is OrderSide.BUY:
-            quantity_delta, cost_delta, cash_delta = fill.quantity, gross + fill.fee, -(gross + fill.fee)
-            realized = Decimal()
-        else:
-            average_cost = current_cost / current_quantity
-            released_cost = average_cost * fill.quantity
-            quantity_delta, cost_delta, cash_delta = -fill.quantity, -released_cost, gross - fill.fee
-            realized = gross - fill.fee - released_cost
+    def _fill_entries(self, fill: Fill, side: OrderSide, current: PositionSnapshot | None) -> tuple[LedgerEntry, ...]:
+        current_quantity = current.quantity if current else 0
+        current_cost = current.cost if current else Decimal()
+        delta = calculate_fill_accounting(
+            side=side, quantity=fill.quantity, price=fill.price,
+            commission=fill.commission, tax=fill.tax, other_fee=fill.other_fee,
+            current_quantity=current_quantity, current_cost=current_cost,
+        )
         def entry(
             entry_type: EntryType,
             effective_at: datetime,
@@ -386,6 +480,8 @@ class ExecutionLedgerService:
             cash_delta: Decimal = Decimal(),
             cost_delta: Decimal = Decimal(),
             realized_pnl_delta: Decimal = Decimal(),
+            lot_id: UUID | None = None,
+            buy_date=None,
         ) -> LedgerEntry:
             return LedgerEntry(
                 account_id=fill.account_id,
@@ -400,13 +496,40 @@ class ExecutionLedgerService:
                 cash_delta=cash_delta,
                 cost_delta=cost_delta,
                 realized_pnl_delta=realized_pnl_delta,
+                lot_id=lot_id,
+                buy_date=buy_date,
             )
-        return (
-            entry(EntryType.POSITION, fill.filled_at, fill.instrument_id, quantity_delta, cost_delta=cost_delta),
-            entry(EntryType.SETTLEMENT, fill.sellable_on if side is OrderSide.BUY else fill.filled_at, fill.instrument_id, quantity_delta),
-            entry(EntryType.CASH, fill.filled_at, cash_delta=cash_delta),
-            entry(EntryType.REALIZED_PNL, fill.filled_at, fill.instrument_id, realized_pnl_delta=realized),
+        aggregate = (
+            entry(EntryType.POSITION, fill.filled_at, fill.instrument_id, delta.quantity_delta, cost_delta=delta.cost_delta),
+            entry(EntryType.SETTLEMENT, fill.sellable_on if side is OrderSide.BUY else fill.filled_at, fill.instrument_id, delta.quantity_delta),
+            entry(EntryType.CASH, fill.filled_at, cash_delta=delta.cash_delta),
+            entry(EntryType.REALIZED_PNL, fill.filled_at, fill.instrument_id, realized_pnl_delta=delta.realized_pnl_delta),
         )
+        lots = list(current.lots if current else ())
+        if side is OrderSide.BUY:
+            final_quantity, final_cost = current_quantity + fill.quantity, current_cost + delta.cost_delta
+            average = final_cost / final_quantity
+            lot_entries = [entry(EntryType.LOT_POSITION, fill.filled_at, lot.instrument_id, cost_delta=average * lot.quantity - lot.cost, lot_id=lot.lot_id, buy_date=lot.buy_date) for lot in lots]
+            lot_entries.extend((
+                entry(EntryType.LOT_POSITION, fill.filled_at, fill.instrument_id, fill.quantity, cost_delta=average * fill.quantity, lot_id=fill.fill_id, buy_date=fill.filled_at.date()),
+                entry(EntryType.LOT_SETTLEMENT, fill.sellable_on, fill.instrument_id, fill.quantity, lot_id=fill.fill_id, buy_date=fill.filled_at.date()),
+            ))
+            return aggregate + tuple(lot_entries)
+        remaining = fill.quantity
+        final_quantity, final_cost = current_quantity - fill.quantity, current_cost + delta.cost_delta
+        average = final_cost / final_quantity if final_quantity else Decimal()
+        lot_entries = []
+        for lot in sorted(lots, key=lambda item: (item.buy_date, str(item.lot_id))):
+            consume = min(remaining, lot.sellable_quantity)
+            final_lot_quantity = lot.quantity - consume
+            target_cost = average * final_lot_quantity
+            lot_entries.append(entry(EntryType.LOT_POSITION, fill.filled_at, lot.instrument_id, -consume, cost_delta=target_cost - lot.cost, lot_id=lot.lot_id, buy_date=lot.buy_date))
+            if consume:
+                lot_entries.append(entry(EntryType.LOT_SETTLEMENT, fill.filled_at, lot.instrument_id, -consume, lot_id=lot.lot_id, buy_date=lot.buy_date))
+            remaining -= consume
+        if remaining:
+            raise InsufficientBalance("FIFO lots do not cover sell quantity")
+        return aggregate + tuple(lot_entries)
 
     @staticmethod
     def _validate_cash_sign(value: CashEvent) -> None:

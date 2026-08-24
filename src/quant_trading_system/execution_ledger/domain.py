@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass,field
-from datetime import datetime,timezone
+from datetime import date,datetime,timezone
 from decimal import Decimal
 from enum import StrEnum
 from typing import Mapping
@@ -10,7 +10,9 @@ class AccountStatus(StrEnum):ACTIVE="ACTIVE";BLOCKED_FOR_SIGNAL="BLOCKED_FOR_SIG
 class OrderSource(StrEnum):RECOMMENDATION="RECOMMENDATION";MANUAL="MANUAL"
 class OrderSide(StrEnum):BUY="BUY";SELL="SELL"
 class OrderStatus(StrEnum):DRAFT="DRAFT";SUBMITTED="SUBMITTED";PARTIALLY_FILLED="PARTIALLY_FILLED";FILLED="FILLED";CANCELLED="CANCELLED";REJECTED="REJECTED"
-class EntryType(StrEnum):POSITION="POSITION";SETTLEMENT="SETTLEMENT";CASH="CASH";REALIZED_PNL="REALIZED_PNL"
+class EntryType(StrEnum):POSITION="POSITION";SETTLEMENT="SETTLEMENT";CASH="CASH";REALIZED_PNL="REALIZED_PNL";LOT_POSITION="LOT_POSITION";LOT_SETTLEMENT="LOT_SETTLEMENT"
+class CorporateActionType(StrEnum):SHARE_DISTRIBUTION="SHARE_DISTRIBUTION";SPLIT="SPLIT";REVERSE_SPLIT="REVERSE_SPLIT";CANCELLATION="CANCELLATION";COST_BASIS_ADJUSTMENT="COST_BASIS_ADJUSTMENT"
+class CorporateCashActionType(StrEnum):CASH_DIVIDEND="CASH_DIVIDEND";DELISTING_CASH_DISPOSAL="DELISTING_CASH_DISPOSAL"
 class CashEventType(StrEnum):DEPOSIT="DEPOSIT";WITHDRAWAL="WITHDRAWAL";DIVIDEND="DIVIDEND";TAX="TAX";FEE="FEE";FX="FX";ADJUSTMENT="ADJUSTMENT"
 class ReconciliationStatus(StrEnum):MATCHED="MATCHED";DIFFERENCE="DIFFERENCE";RESOLVED="RESOLVED"
 def aware(x:datetime,name:str)->datetime:
@@ -49,13 +51,33 @@ class CashEvent:
   if self.amount==0 or len(self.currency)!=3 or not self.external_ref.strip() or not self.reason.strip():raise InvalidLedgerInput("invalid cash event")
 @dataclass(frozen=True,slots=True)
 class LedgerEntry:
- account_id:UUID;entry_type:EntryType;currency:str;effective_at:datetime;recorded_at:datetime;source_type:str;source_id:UUID;instrument_id:UUID|None=None;quantity_delta:int=0;cash_delta:Decimal=Decimal();cost_delta:Decimal=Decimal();realized_pnl_delta:Decimal=Decimal();entry_id:UUID=field(default_factory=uuid4)
+ account_id:UUID;entry_type:EntryType;currency:str;effective_at:datetime;recorded_at:datetime;source_type:str;source_id:UUID;instrument_id:UUID|None=None;quantity_delta:int=0;cash_delta:Decimal=Decimal();cost_delta:Decimal=Decimal();realized_pnl_delta:Decimal=Decimal();lot_id:UUID|None=None;buy_date:date|None=None;entry_id:UUID=field(default_factory=uuid4)
  def __post_init__(self):
   object.__setattr__(self,"effective_at",aware(self.effective_at,"effective_at"));object.__setattr__(self,"recorded_at",aware(self.recorded_at,"recorded_at"))
   for n in ("cash_delta","cost_delta","realized_pnl_delta"):object.__setattr__(self,n,dec(getattr(self,n)))
 @dataclass(frozen=True,slots=True)
 class PositionSnapshot:
- instrument_id:UUID;quantity:int;sellable_quantity:int;cost:Decimal
+ instrument_id:UUID;quantity:int;sellable_quantity:int;cost:Decimal;lots:tuple["PositionLotSnapshot",...]=()
+@dataclass(frozen=True,slots=True)
+class PositionLotSnapshot:
+ lot_id:UUID;instrument_id:UUID;buy_date:date;quantity:int;sellable_quantity:int;cost:Decimal
+@dataclass(frozen=True,slots=True)
+class PositionAdjustment:
+ account_id:UUID;instrument_id:UUID;lot_id:UUID;buy_date:date;action_type:CorporateActionType;currency:str;quantity_delta:int;sellable_quantity_delta:int;cost_delta:Decimal;effective_at:datetime;available_at:datetime;external_ref:str;reason:str;adjustment_id:UUID=field(default_factory=uuid4)
+ def __post_init__(self):
+  object.__setattr__(self,"cost_delta",dec(self.cost_delta));object.__setattr__(self,"effective_at",aware(self.effective_at,"effective_at"));object.__setattr__(self,"available_at",aware(self.available_at,"available_at"))
+  if len(self.currency)!=3 or not self.external_ref.strip() or not self.reason.strip():raise InvalidLedgerInput("invalid position adjustment")
+  if self.available_at>self.effective_at:raise InvalidLedgerInput("corporate action unavailable by effective time")
+  if self.quantity_delta==0 and self.sellable_quantity_delta==0 and self.cost_delta==0:raise InvalidLedgerInput("empty position adjustment")
+@dataclass(frozen=True,slots=True)
+class CorporateCashAction:
+ account_id:UUID;instrument_id:UUID;lot_id:UUID;buy_date:date;action_type:CorporateCashActionType;currency:str;gross_cash:Decimal;withholding_tax:Decimal;effective_at:datetime;available_at:datetime;external_ref:str;reason:str;action_id:UUID=field(default_factory=uuid4)
+ def __post_init__(self):
+  object.__setattr__(self,"gross_cash",dec(self.gross_cash));object.__setattr__(self,"withholding_tax",dec(self.withholding_tax));object.__setattr__(self,"effective_at",aware(self.effective_at,"effective_at"));object.__setattr__(self,"available_at",aware(self.available_at,"available_at"))
+  if len(self.currency)!=3 or self.gross_cash<=0 or self.withholding_tax<0 or self.withholding_tax>=self.gross_cash or not self.external_ref.strip() or not self.reason.strip():raise InvalidLedgerInput("invalid corporate cash action")
+  if self.available_at>self.effective_at:raise InvalidLedgerInput("corporate cash action unavailable by effective time")
+ @property
+ def net_cash(self):return self.gross_cash-self.withholding_tax
 @dataclass(frozen=True,slots=True)
 class AccountSnapshot:
  account_id:UUID;as_of:datetime;cash:Mapping[str,Decimal];positions:tuple[PositionSnapshot,...];content_hash:str;entry_watermark:tuple[UUID,...];source:str="execution_ledger";snapshot_id:UUID=field(default_factory=uuid4)
