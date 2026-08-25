@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "timezone": "Asia/Shanghai",
+  "readiness_policy": {
+    "required_before_research_ready": [
+      "raw_snapshot_immutable",
+      "source_manifest_complete",
+      "canonical_schema_valid",
+      "point_in_time_evidence_valid",
+      "human_semantics_confirmed"
+    ]
+  },
+  "sources": [
+    {
+      "source_id": "cfets_shibor_public",
+      "provider": "China Foreign Exchange Trade System",
+      "authority": "official",
+      "acquisition_mode": "public_page_backend",
+      "method": "POST",
+      "url": "https://www.shibor.sh.cn/ags/ms/cm-u-bk-shibor/ShiborHis",
+      "public_landing_page": "https://www.shibor.sh.cn/shibor/dataservices/",
+      "publication_rule": "11:00 Asia/Shanghai on each business day",
+      "automation_status": "sample_only_pending_usage_confirmation",
+      "request_interval_seconds": 2
+    },
+    {
+      "source_id": "nbs_pmi_release_archive",
+      "provider": "National Bureau of Statistics of China",
+      "authority": "official",
+      "acquisition_mode": "public_release_page",
+      "method": "GET",
+      "url": "https://www.stats.gov.cn/zwfwck/sjfb/202607/t20260731_1964253.html",
+      "public_landing_page": "https://www.stats.gov.cn/sj/fbrc/bnxxfb/",
+      "publication_rule": "observed timestamp printed on each release page",
+      "automation_status": "sample_only_pending_semantics_confirmation",
+      "request_interval_seconds": 2
+    },
+    {
+      "source_id": "nbs_national_data_pmi",
+      "provider": "National Bureau of Statistics of China",
+      "authority": "official",
+      "acquisition_mode": "public_undocumented_query_endpoint",
+      "method": "GET",
+      "url": "https://data.stats.gov.cn/easyquery.htm",
+      "public_landing_page": "https://data.stats.gov.cn/easyquery.htm?cn=A01&zb=A0B01",
+      "publication_rule": "database refresh time is not a release timestamp",
+      "automation_status": "blocked_by_403_in_current_environment_reconciliation_only",
+      "request_interval_seconds": 3
+    }
+  ],
+  "series": [
+    {"series_id":"CN.SHIBOR.ON","source_id":"cfets_shibor_public","source_field":"ON","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.SHIBOR.1W","source_id":"cfets_shibor_public","source_field":"1W","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.SHIBOR.2W","source_id":"cfets_shibor_public","source_field":"2W","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.SHIBOR.1M","source_id":"cfets_shibor_public","source_field":"1M","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.SHIBOR.3M","source_id":"cfets_shibor_public","source_field":"3M","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.SHIBOR.6M","source_id":"cfets_shibor_public","source_field":"6M","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.SHIBOR.9M","source_id":"cfets_shibor_public","source_field":"9M","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.SHIBOR.1Y","source_id":"cfets_shibor_public","source_field":"1Y","frequency":"business_daily","unit":"percent_per_annum","seasonal_adjustment":"not_applicable","value_min":0.0,"value_max":20.0},
+    {"series_id":"CN.PMI.MFG.HEADLINE","source_id":"nbs_pmi_release_archive","source_field":"manufacturing_pmi","frequency":"monthly","unit":"diffusion_index_percent","seasonal_adjustment":"seasonally_adjusted","value_min":0.0,"value_max":100.0},
+    {"series_id":"CN.PMI.MFG.PRODUCTION","source_id":"nbs_pmi_release_archive","source_field":"production","frequency":"monthly","unit":"diffusion_index_percent","seasonal_adjustment":"seasonally_adjusted","value_min":0.0,"value_max":100.0},
+    {"series_id":"CN.PMI.MFG.NEW_ORDERS","source_id":"nbs_pmi_release_archive","source_field":"new_orders","frequency":"monthly","unit":"diffusion_index_percent","seasonal_adjustment":"seasonally_adjusted","value_min":0.0,"value_max":100.0},
+    {"series_id":"CN.PMI.MFG.RAW_MATERIAL_INVENTORY","source_id":"nbs_pmi_release_archive","source_field":"raw_material_inventory","frequency":"monthly","unit":"diffusion_index_percent","seasonal_adjustment":"seasonally_adjusted","value_min":0.0,"value_max":100.0},
+    {"series_id":"CN.PMI.MFG.EMPLOYMENT","source_id":"nbs_pmi_release_archive","source_field":"employment","frequency":"monthly","unit":"diffusion_index_percent","seasonal_adjustment":"seasonally_adjusted","value_min":0.0,"value_max":100.0},
+    {"series_id":"CN.PMI.MFG.SUPPLIER_DELIVERY_TIME","source_id":"nbs_pmi_release_archive","source_field":"supplier_delivery_time","frequency":"monthly","unit":"diffusion_index_percent","seasonal_adjustment":"seasonally_adjusted","value_min":0.0,"value_max":100.0}
+  ]
+}
