@@ -44,7 +44,7 @@
       "value_field": "wghtdAvgRepoRate",
       "instrument_field": "instrmntCd",
       "request_interval_seconds": 2,
-      "history_probe_result": "public_endpoint_exposes_rolling_window_only"
+      "history_probe_result": "current_endpoint_returned_repeatable_empty_records_for_early_shadow_dates"
     },
     "pboc_omo_release": {
       "authority": "official",

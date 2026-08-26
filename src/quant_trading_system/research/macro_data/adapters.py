@@ -141,12 +141,12 @@ def parse_shibor(
     return pd.DataFrame(records).sort_values(["reference_period", "series_id"]).reset_index(drop=True)
 
 
-def next_strategy_trading_day(reference_date: str, holidays: frozenset[str] = frozenset()) -> datetime:
-    """Return the next strategy weekday bar at 09:30 Asia/Shanghai."""
-    candidate = datetime.strptime(reference_date, "%Y-%m-%d").date() + timedelta(days=1)
-    while candidate.weekday() >= 5 or candidate.isoformat() in holidays:
-        candidate += timedelta(days=1)
-    return datetime.combine(candidate, time(9, 30), SHANGHAI)
+def next_strategy_trading_day(reference_date: str, trading_dates: frozenset[str]) -> datetime:
+    """Return the next explicitly supplied strategy session at 09:30 Asia/Shanghai."""
+    later_dates = sorted(item for item in trading_dates if item > reference_date)
+    if not later_dates:
+        raise ValueError(f"strategy calendar has no trading date after {reference_date}")
+    return datetime.combine(datetime.strptime(later_dates[0], "%Y-%m-%d").date(), time(9, 30), SHANGHAI)
 
 
 def _empty_rates_frame() -> pd.DataFrame:
@@ -160,6 +160,7 @@ def parse_cfets_repo_json(
     requested_date: str,
     index_type: str,
     series_id: str,
+    strategy_trading_dates: frozenset[str],
 ) -> pd.DataFrame:
     """Parse exactly one official CFETS R007 or DR007 weighted-average response."""
     expected = {
@@ -197,7 +198,7 @@ def parse_cfets_repo_json(
     release_at = datetime.combine(
         datetime.strptime(requested_date, "%Y-%m-%d").date(), time(23, 59, 59), SHANGHAI
     )
-    next_bar = next_strategy_trading_day(requested_date)
+    next_bar = next_strategy_trading_day(requested_date, strategy_trading_dates)
     return pd.DataFrame([
         _base_record(
             series_id=series_id,

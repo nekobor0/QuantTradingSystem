@@ -532,11 +532,30 @@ def _append_frame(frames: list[pd.DataFrame], frame: pd.DataFrame) -> None:
 def _date_strings(start_date: str, end_date: str) -> list[str]:
     return [item.date().isoformat() for item in pd.date_range(start_date, end_date, freq="D")]
 
+def _repo_outcome_status(requests: list[dict[str, Any]]) -> str:
+    expected_series = {"CN.REPO.DR007", "CN.REPO.R007"}
+    if len(requests) == 2 and {item.get("series_id") for item in requests} == expected_series:
+        if all(item.get("status") == "SUCCESS" for item in requests):
+            return "OFFICIAL_ROWS"
+        if all(
+            item.get("status") == "QUARANTINED"
+            and str(item.get("reason", "")).endswith("CFETS response contains no records")
+            for item in requests
+        ):
+            return "OFFICIAL_EMPTY_RECORDS"
+    return "UNEXPLAINED_QUARANTINED"
+
+
+def _unexplained_repo_dates(trading_dates: list[str], outcomes: dict[str, dict[str, Any]]) -> list[str]:
+    explained = {"OFFICIAL_ROWS", "OFFICIAL_EMPTY_RECORDS"}
+    return [day for day in trading_dates if outcomes.get(day, {}).get("status") not in explained]
+
 
 def run_rates_shadow_backfill(
     *,
     registry_path: Path,
     output_root: Path,
+    strategy_trading_dates: frozenset[str],
     start_date: str = "2026-07-27",
     end_date: str = "2026-08-25",
     sleep_seconds: float | None = None,
@@ -561,7 +580,11 @@ def run_rates_shadow_backfill(
         for series_id, spec in contract["series"].items()
     )
     dates = _date_strings(start_date, end_date)
-    weekdays = [item for item in dates if date.fromisoformat(item).weekday() < 5]
+    for item in strategy_trading_dates:
+        date.fromisoformat(item)
+    trading_days = [item for item in dates if item in strategy_trading_dates]
+    if not trading_days or not any(item > trading_days[-1] for item in strategy_trading_dates):
+        raise ValueError("strategy calendar must cover the requested range and at least one later session")
     interval = repo.request_interval_seconds if sleep_seconds is None else sleep_seconds
     repo_frames: list[pd.DataFrame] = []
     all_frames: list[pd.DataFrame] = []
@@ -569,7 +592,7 @@ def run_rates_shadow_backfill(
     quarantine: list[str] = []
     repo_outcomes: dict[str, dict[str, Any]] = {}
 
-    for requested_date in weekdays:
+    for requested_date in trading_days:
         outcome = {"status": "PENDING", "requests": []}
         for series_id, index_type in (
             ("CN.REPO.DR007", repo.dr007_index_type if hasattr(repo, "dr007_index_type") else "markInterBankVOList"),
@@ -600,6 +623,7 @@ def run_rates_shadow_backfill(
                     requested_date=requested_date,
                     index_type=index_type,
                     series_id=series_id,
+                    strategy_trading_dates=strategy_trading_dates,
                 )
                 _append_frame(repo_frames, frame)
                 _append_frame(all_frames, frame)
@@ -610,9 +634,9 @@ def run_rates_shadow_backfill(
                 qpath = _quarantine_request(output_root, f"cfets_{requested_date}_{index_type}", detail)
                 quarantine.append(qpath)
                 outcome["requests"].append({"series_id": series_id, "status": "QUARANTINED", "reason": detail["error"], "quarantine": qpath})
-            if requested_date != weekdays[-1] or series_id != "CN.REPO.R007":
+            if requested_date != trading_days[-1] or series_id != "CN.REPO.R007":
                 time.sleep(interval)
-        outcome["status"] = "OFFICIAL_ROWS" if all(item["status"] == "SUCCESS" for item in outcome["requests"]) else "OFFICIAL_UNAVAILABLE_QUARANTINED"
+        outcome["status"] = _repo_outcome_status(outcome["requests"])
         repo_outcomes[requested_date] = outcome
 
     events: dict[str, list[dict[str, Any]]] = {"omo": [], "mlf": []}
@@ -692,8 +716,8 @@ def run_rates_shadow_backfill(
     event_omissions = [omission for items in events.values() for item in items for omission in item.get("omissions", [])]
     structural_omissions = [omission for omission in event_omissions if omission["series_id"] == "CN.PBOC.MLF.1Y.RATE"]
     blocked_probe: list[dict[str, Any]] = []
-    if len(pair_dates) / len(weekdays) < 0.95 and weekdays:
-        probe_date = next(day for day in weekdays if day not in pair_dates)
+    if len(pair_dates) / len(trading_days) < 0.95 and trading_days:
+        probe_date = next(day for day in trading_days if day not in pair_dates)
         for attempt in range(1, 4):
             body = urlencode({
                 "lang": "cn",
@@ -717,9 +741,9 @@ def run_rates_shadow_backfill(
     audit = {
         "contract_id": "R011.W1.RATES_LIQUIDITY.SHADOW_V1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "requested_range": {"start": start_date, "end": end_date, "calendar_dates": len(dates), "trading_dates": len(weekdays)},
-        "repo": {"requested_dates": len(weekdays), "request_count": len(weekdays) * 2, "success_dates": len(pair_dates), "success_date_list": pair_dates, "coverage": len(pair_dates) / len(weekdays) if weekdays else 0.0, "outcomes": repo_outcomes, "empty_response_dates": [day for day, item in repo_outcomes.items() if any("no records" in str(req.get("reason", "")) for req in item["requests"])], "source_date_mismatch_dates": [day for day, item in repo_outcomes.items() if any("date mismatch" in str(req.get("reason", "")) for req in item["requests"]) ]},
-        "repo_pair_same_date_coverage": len(pair_dates) / len(weekdays) if weekdays else 0.0,
+        "requested_range": {"start": start_date, "end": end_date, "calendar_dates": len(dates), "trading_dates": len(trading_days), "calendar_basis": "explicit_strategy_trading_dates"},
+        "repo": {"requested_dates": len(trading_days), "request_count": len(trading_days) * 2, "success_dates": len(pair_dates), "success_date_list": pair_dates, "coverage": len(pair_dates) / len(trading_days), "outcomes": repo_outcomes, "empty_response_dates": [day for day, item in repo_outcomes.items() if item["status"] == "OFFICIAL_EMPTY_RECORDS"], "source_date_mismatch_dates": [day for day, item in repo_outcomes.items() if any("date mismatch" in str(req.get("reason", "")) for req in item["requests"]) ]},
+        "repo_pair_same_date_coverage": len(pair_dates) / len(trading_days),
         "duplicate_primary_keys": duplicates,
         "value_domain_failures": value_domain_failures,
         "daily_change_over_2pp": daily_changes,
@@ -730,13 +754,13 @@ def run_rates_shadow_backfill(
         "mlf_structural_omissions": structural_omissions,
         "event_omissions": event_omissions,
         "mlf_post_reform_rate_rows": len(mlf_rows),
-        "calendar_status": {day: ("NON_TRADING_DAY" if date.fromisoformat(day).weekday() >= 5 else repo_outcomes.get(day, {}).get("status", "UNEXPLAINED_MISSING")) for day in dates},
-        "unexplained_missing_dates": [day for day in weekdays if day not in repo_outcomes],
+        "calendar_status": {day: ("NON_TRADING_DAY" if day not in strategy_trading_dates else repo_outcomes.get(day, {}).get("status", "UNEXPLAINED_MISSING")) for day in dates},
+        "unexplained_missing_dates": _unexplained_repo_dates(trading_days, repo_outcomes),
         "quarantine": quarantine,
-        "blocked_probe_attempts": blocked_probe,
+        "repeated_endpoint_probe_attempts": blocked_probe,
         "captured": captured,
     }
-    blocked = audit["repo_pair_same_date_coverage"] < 0.95 or any(value != 1.0 for value in event_rates.values() if value is not None)
+    blocked = audit["repo_pair_same_date_coverage"] < 0.95 or any(value != 1.0 for value in event_rates.values() if value is not None) or bool(audit["unexplained_missing_dates"])
     audit["research_ready"] = not blocked and duplicates == 0 and not value_domain_failures and len(mlf_rows) == 0 and not audit["unexplained_missing_dates"]
     audit["blocked"] = blocked
     _write_json(output_root / "audits" / "w1_rates_shadow.json", audit)
@@ -745,11 +769,11 @@ def run_rates_shadow_backfill(
         f"Window: {start_date} to {end_date}. Research-ready promotion: **NO**.\n\n"
         "| Source | Official endpoint | Result |\n"
         "|---|---|---|\n"
-        f"| CFETS repo daily | `{repo.url}` | {len(pair_dates)}/{len(weekdays)} trading dates paired ({audit['repo_pair_same_date_coverage']:.1%}); rolling-window empty responses quarantined |\n"
+        f"| CFETS repo daily | `{repo.url}` | {len(pair_dates)}/{len(trading_days)} trading dates paired ({audit['repo_pair_same_date_coverage']:.1%}); empty responses from this endpoint quarantined |\n"
         f"| PBOC OMO index/release | `{omo.url}` | {discovered['omo']}/{parsed['omo']} relevant pages parsed ({event_rates['omo']}); zero-quantity pages retained as no-rate events |\n"
         f"| PBOC MLF index/release | `{mlf.url}` | {discovered['mlf']}/{parsed['mlf']} pages parsed ({event_rates['mlf']}); post-2025-03 unified-rate rows={len(mlf_rows)} |\n\n"
         "## Decision\n\n"
-        "Do not expand the backfill or connect these series to strategy code. The official CFETS historical endpoint exposes only a rolling window in this environment; three independent probes for the first missing historical date returned HTTP 200 with empty records. No Tushare or other third-party values were used to fill the gap.\n\n"
+        "Do not expand the backfill or connect these series to strategy code. Three repeated requests to the same CFETS endpoint and index type for the first missing date returned HTTP 200 with empty records; this does not establish that independent official retrieval paths are exhausted. No Tushare or other third-party values were used to fill the gap.\n\n"
         "The PBOC event path is source-available for the discovered window and parses at 100%. OMO zero-operation notices are explainable omissions, not synthetic rates. The MLF notice confirms the post-2025-03 multiple-price regime, so `CN.PBOC.MLF.1Y.RATE` remains structurally undefined after the break.\n\n"
         "See `w1_rates_shadow.json` for request bodies, response status, raw SHA-256, timestamp checks, and quarantine paths.\n",
         encoding="utf-8",
@@ -758,9 +782,9 @@ def run_rates_shadow_backfill(
     progress.parent.mkdir(parents=True, exist_ok=True)
     progress.write_text(
         "# R011 W1 rates shadow progress\n\n"
-        f"- Range: {start_date} to {end_date}; calendar dates={len(dates)}, trading dates={len(weekdays)}.\n"
-        "- Offline parser/gold regression: 10 passed; contract and W1 gate baseline: passed.\n"
-        f"- CFETS pair coverage: {len(pair_dates)}/{len(weekdays)} ({audit['repo_pair_same_date_coverage']:.1%}); quarantine={len(quarantine)}.\n"
+        f"- Range: {start_date} to {end_date}; calendar dates={len(dates)}, trading dates={len(trading_days)} from an explicit strategy calendar.\n"
+        "- Offline parser/gold regression, contract and W1 gate baseline: passed.\n"
+        f"- CFETS pair coverage: {len(pair_dates)}/{len(trading_days)} ({audit['repo_pair_same_date_coverage']:.1%}); quarantine={len(quarantine)}.\n"
         f"- PBOC discovery/parse: OMO {discovered['omo']}/{parsed['omo']}, MLF {discovered['mlf']}/{parsed['mlf']}; post-reform MLF rate rows={len(mlf_rows)}.\n"
         f"- research_ready={audit['research_ready']}; blocked={blocked}. See `audits/w1_rates_shadow.json` for raw hashes and per-request evidence.\n\n"
         "## Next step\n\n"
