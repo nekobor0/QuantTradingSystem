@@ -15,6 +15,7 @@ import pandas as pd
 
 from .adapters import parse_pmi_release, parse_shibor
 from .contracts import (
+    RawSnapshot,
     Registry,
     SeriesSpec,
     capture_raw_snapshot,
@@ -99,7 +100,7 @@ def _run_sample(
     request_url: str,
     method: str,
     extension: str,
-    parser: Callable[[bytes, object], pd.DataFrame],
+    parser: Callable[[bytes, RawSnapshot], pd.DataFrame],
 ) -> dict[str, object]:
     response = fetch_public_url(request_url, method=method)
     retrieved_at = datetime.now(timezone.utc)

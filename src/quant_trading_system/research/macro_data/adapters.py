@@ -139,6 +139,14 @@ def parse_shibor(
 
 
 def _publication_timestamp(text: str) -> datetime:
+    metadata = re.search(
+        r"""name=["']PubDate["'][^>]+content=["'](\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2})["']""",
+        text,
+        re.IGNORECASE,
+    )
+    if metadata:
+        year, month, day, clock = metadata.groups()
+        return datetime.strptime(f"{year}-{month}-{day} {clock}", "%Y-%m-%d %H:%M").replace(tzinfo=SHANGHAI)
     visible = html.unescape(re.sub(r"<[^>]+>", " ", text))
     normalized = " ".join(visible.split())
     prefixed = re.search(
@@ -166,8 +174,14 @@ def _period(cell: str) -> str | None:
 def _rolling_rows(tables: list[list[list[str]]]) -> list[tuple[str, list[float]]]:
     for table in tables:
         dated = [row for row in table if row and _period(row[0]) is not None and len(row) >= 7]
-        if len(dated) >= 10:
-            return [(_period(row[0]) or "", [float(value) for value in row[1:7]]) for row in dated]
+        has_pmi_header = any(cell.strip().upper() == "PMI" for row in table[:3] for cell in row)
+        if dated and has_pmi_header:
+            result: list[tuple[str, list[float]]] = []
+            for row in dated:
+                period = _period(row[0])
+                assert period is not None
+                result.append((period, [float(value) for value in row[1:7]]))
+            return result
     return []
 
 

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from quant_trading_system.research.macro_data.backfill import infer_pmi_period
+from quant_trading_system.research.macro_data.backfill import PMI_SERIES_TO_TUSHARE, infer_pmi_period
 from quant_trading_system.research.macro_data.contracts import capture_raw_snapshot
 
 
@@ -35,3 +35,14 @@ def test_pmi_catalog_period_inference_handles_year_boundary_and_modern_titles():
     assert infer_pmi_period("12月份全国制造业采购经理指数升势明显", "2010-01-04") == "2009-12"
     assert infer_pmi_period("2017年12月中国制造业采购经理指数为51.6%", "2017-12-31") == "2017-12"
     assert infer_pmi_period("中国制造业采购经理指数连续三个月回落", "2011-07-01") is None
+
+
+def test_pmi_tushare_reconciliation_mapping_is_frozen():
+    assert PMI_SERIES_TO_TUSHARE == {
+        "CN.PMI.MFG.HEADLINE": "pmi010000",
+        "CN.PMI.MFG.PRODUCTION": "pmi010400",
+        "CN.PMI.MFG.NEW_ORDERS": "pmi010500",
+        "CN.PMI.MFG.RAW_MATERIAL_INVENTORY": "pmi010700",
+        "CN.PMI.MFG.EMPLOYMENT": "pmi010800",
+        "CN.PMI.MFG.SUPPLIER_DELIVERY_TIME": "pmi010600",
+    }

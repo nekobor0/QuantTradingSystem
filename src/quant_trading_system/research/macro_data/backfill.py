@@ -24,11 +24,11 @@ PMI_TITLE = re.compile(r"^(?P<year>\d{4})年(?P<month>\d{1,2})月中国采购经
 PMI_YEAR_MONTH = re.compile(r"(?:(?P<year>\d{4})年)?(?P<month>\d{1,2})月份?")
 PMI_SERIES_TO_TUSHARE = {
     "CN.PMI.MFG.HEADLINE": "pmi010000",
-    "CN.PMI.MFG.PRODUCTION": "pmi010100",
-    "CN.PMI.MFG.NEW_ORDERS": "pmi010200",
-    "CN.PMI.MFG.RAW_MATERIAL_INVENTORY": "pmi010300",
-    "CN.PMI.MFG.EMPLOYMENT": "pmi010400",
-    "CN.PMI.MFG.SUPPLIER_DELIVERY_TIME": "pmi010500",
+    "CN.PMI.MFG.PRODUCTION": "pmi010400",
+    "CN.PMI.MFG.NEW_ORDERS": "pmi010500",
+    "CN.PMI.MFG.RAW_MATERIAL_INVENTORY": "pmi010700",
+    "CN.PMI.MFG.EMPLOYMENT": "pmi010800",
+    "CN.PMI.MFG.SUPPLIER_DELIVERY_TIME": "pmi010600",
 }
 SHIBOR_SERIES_TO_TUSHARE = {
     "CN.SHIBOR.ON": "on",
@@ -273,7 +273,8 @@ def run_pmi_backfill(
         "reference_period_max": end,
         "missing_reference_periods_within_parsed_range": sorted(expected - parsed_periods),
         "validation": validation,
-        "research_ready": not state["failures"] and validation["passed"],
+        "research_ready": not state["failures"] and validation["passed"] and not (expected - parsed_periods),
+        "restriction": "known monthly coverage gap must be excluded explicitly" if expected - parsed_periods else None,
         "curated_path": str(destination.resolve()),
         "catalog_path": str(catalog_path.resolve()),
     }
@@ -290,6 +291,8 @@ def _comparison_report(left: pd.DataFrame, right: pd.DataFrame, keys: list[str])
         "matching_cells": len(joined) - len(mismatches),
         "mismatch_cells": len(mismatches),
         "max_absolute_difference": float(joined["absolute_difference"].max()) if len(joined) else None,
+        "reference_period_min": str(joined["reference_period"].min()) if len(joined) else None,
+        "reference_period_max": str(joined["reference_period"].max()) if len(joined) else None,
         "passed": bool(len(joined) and mismatches.empty),
     }
     return report, mismatches
@@ -307,6 +310,20 @@ def reconcile_tushare(
     shibor_report, shibor_mismatch = _comparison_report(
         shibor_left, shibor_right[["series_id", "reference_period", "value_tushare"]], ["series_id", "reference_period"]
     )
+    swap_dates: list[str] = []
+    for reference_period, group in shibor_mismatch.groupby("reference_period"):
+        rows = {str(row.series_id): row for row in group.itertuples()}
+        overnight = rows.get("CN.SHIBOR.ON")
+        three_month = rows.get("CN.SHIBOR.3M")
+        if overnight is not None and three_month is not None and (
+            abs(overnight.value_official - three_month.value_tushare) <= 1e-9
+            and abs(three_month.value_official - overnight.value_tushare) <= 1e-9
+        ):
+            swap_dates.append(str(reference_period))
+    shibor_report["diagnosis"] = {
+        "tushare_on_3m_exact_column_swap": bool(swap_dates) and len(swap_dates) * 2 == len(shibor_mismatch),
+        "affected_dates": swap_dates,
+    }
 
     pmi = pd.read_parquet(output_root / "curated" / "pmi_observation_vintages.parquet")
     pmi_latest = pmi.sort_values(["available_at", "retrieved_at"]).drop_duplicates(
@@ -334,6 +351,13 @@ def reconcile_tushare(
         "shibor": shibor_report,
         "pmi": pmi_report,
         "passed": shibor_report["passed"] and pmi_report["passed"],
+        "research_readiness": {
+            "pmi_reconciled_window_ready": pmi_report["passed"],
+            "pmi_reconciled_window_start": pmi_report["reference_period_min"],
+            "pmi_reconciled_window_end": pmi_report["reference_period_max"],
+            "shibor_ready": False,
+            "shibor_restriction": "historical capture timing and quarantined Tushare O/N-3M swap",
+        },
     }
     _write_json(output_root / "audits" / "tushare_reconciliation.json", report)
     return report

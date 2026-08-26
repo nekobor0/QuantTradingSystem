@@ -137,3 +137,20 @@ def test_validation_rejects_lookahead_and_out_of_bounds_values():
     assert not report["passed"]
     assert report["checks"]["available_not_before_release"] is False
     assert report["checks"]["values_within_registered_bounds"] is False
+
+
+def test_pmi_parser_accepts_short_rolling_table_and_pubdate_metadata():
+    rows = "".join(
+        f"<tr><td>2012年{month}月</td><td>50.5</td><td>53.6</td><td>50.4</td>"
+        "<td>49.7</td><td>47.1</td><td>49.7</td></tr>"
+        for month in range(1, 5)
+    )
+    payload = (
+        '<html><head><meta name="PubDate" content="2012/05/01 09:00"></head><body><table>'
+        '<tr><td></td><td>PMI</td></tr><tr><td>生产</td><td>新订单</td></tr>'
+        f"{rows}</table></body></html>"
+    ).encode()
+    frame = parse_pmi_release(payload, _snapshot("nbs_pmi_release_archive"))
+    assert len(frame) == 24
+    assert set(frame["reference_period"]) == {"2012-01", "2012-02", "2012-03", "2012-04"}
+    assert set(frame["release_at"]) == {"2012-05-01T09:00:00+08:00"}

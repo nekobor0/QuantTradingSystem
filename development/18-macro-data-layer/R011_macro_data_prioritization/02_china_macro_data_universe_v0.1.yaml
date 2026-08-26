@@ -1,0 +1,4209 @@
+meta:
+  title: China Macro Data Universe v0.1
+  version: '0.1'
+  as_of: '2026-08-25'
+  language: zh-CN
+  purpose: 供Codex/Agent构建中国宏观增量数据层、Point-in-Time数据库、宏观状态模型与Conditional Alpha研究使用。
+  series_count: 145
+  scope: 中国宏观、信用、流动性、财政、外贸、地产、价格、就业、产业实物量及社保机构持仓补充层；优先官方/法定披露来源。
+  history_goal: 核心长期序列尽量覆盖2000-2005及更早；对不存在或口径不连续的序列不做伪回填。
+  history_start_semantics: history_start_target表示采集目标/已知制度起点，不等于保证存在第一条机器可读记录。采集器必须探测实际first_non_null并写入manifest。
+  lead_lag_semantics: 仅表示相对特定实体经济/政策链条的通常经济含义，不代表对股票收益天然具有预测能力。
+hard_rules:
+- 任何回测只能使用 available_ts <= decision_ts 的数据。
+- 必须同时保存 observation_period、release_ts、available_ts、vintage_ts；禁止只存date/value。
+- 原始值与派生特征分表；不得覆盖原始官方值。
+- 遇到修订序列必须保留vintage；若拿不到历史vintage，明确标记vintage_unavailable并降低证据等级。
+- 累计值转换单月值时必须记录公式和口径；工业/能源等样本范围变化时不得机械相减。
+- 随机K-fold不用于宏观时序主验证；默认walk-forward/expanding-window。
+- 领先/同步/滞后必须相对于target和horizon重新实证检验，不能作为静态真理。
+- 官方网页优先级：结构化接口/XLS/CSV > HTML表格 > PDF；OCR仅最后手段。
+- 每次抓取保存raw response、source_url、fetched_at、content_hash、parser_version。
+- 遇到统计制度或基期变化，拆分regime或建立methodology_version，禁止静默拼接。
+priority_definition:
+  T1: 首批生产级：直接支持Growth/Inflation/Credit/Liquidity/Property/External核心状态。
+  T2: 第二批研究级：增强结构解释、Nowcast和行业条件信号。
+  T3: 补充层：低频、机构行为或特定风险指标。
+frequency_definition:
+  event: 不规则政策事件
+  daily: 交易日/自然日日频
+  monthly: 月度
+  quarterly: 季度
+  annual: 年度
+source_registry:
+  NBS_RELEASE:
+    name: 国家统计局主要统计信息发布日程与发布稿
+    authority: 国家统计局
+    url: https://www.stats.gov.cn/xxgk/sjfb/fbrcb/
+    access:
+    - html
+    - release_calendar
+    pit_value: 高：用于确定实际发布时间；应与国家数据数值表配对
+    notes: 2026发布日程注明：除PMI外一般发布上月/上季/上年或累计数据；国家数据数据库通常在发布后约3个工作日更新全部进度指标。
+  NBS_DATA:
+    name: 国家数据
+    authority: 国家统计局
+    url: https://data.stats.gov.cn/easyquery.htm
+    access:
+    - structured_web_query
+    - html
+    pit_value: 中高：历史值覆盖广，但必须另存发布时点与修订版本
+    notes: 含月度、季度、年度、地区、部门等数据库。优先研究其网络请求/结构化接口，不建议脆弱DOM抓取。
+  PBOC_STATS:
+    name: 调查统计司统计数据与金融统计数据报告
+    authority: 中国人民银行
+    url: https://www.pbc.gov.cn/diaochatongjisi/116219/116319/index.html
+    access:
+    - html
+    - xls
+    - pdf
+    - release_article
+    pit_value: 高：货币、信贷、社融需保存实际公告时间和口径注释
+    notes: 社融增量2011年正式编制公布；官方提供可回溯到2002年的历史数据。口径有多次调整。
+  PBOC_POLICY:
+    name: 货币政策工具与公开市场操作
+    authority: 中国人民银行
+    url: https://www.pbc.gov.cn/zhengcehuobisi/125207/125213/index.html
+    access:
+    - html
+    - release_article
+    pit_value: 高：事件时间明确，适合事件研究
+    notes: 用于OMO、MLF、降准降息、政策利率等事件型序列。
+  MOF_FISCAL:
+    name: 财政数据/全国财政收支情况
+    authority: 财政部
+    url: https://www.mof.gov.cn/gkml/caizhengshuju/
+    access:
+    - html
+    - release_article
+    - attachment
+    pit_value: 高：按公告实际发布时间使用
+    notes: 月度多为累计口径。历史网页结构有变化，需建立URL归档和解析器版本。
+  CUSTOMS:
+    name: 海关统计数据在线查询平台
+    authority: 海关总署
+    url: https://stats.customs.gov.cn/
+    access:
+    - structured_query
+    - download
+    pit_value: 中高：在线平台2018-11-01上线；更早历史需结合海关月报/年鉴归档
+    notes: 可按商品、贸易伙伴、贸易方式、收发货人注册地等查询。抓取时注意参数字典与HS版本变更。
+  SAFE:
+    name: 国家外汇管理局统计数据
+    authority: 国家外汇管理局
+    url: https://www.safe.gov.cn/safe/tjsj1/index.html
+    access:
+    - html
+    - xls
+    - pdf
+    - release_calendar
+    pit_value: 高：官方每年给出主要统计数据发布时间表
+    notes: 国际收支初步数自2009-08起增加发布；服务贸易自2014起按月公布，货物贸易自2015起按月公布；全口径银行结售汇自2013起按月公布。
+  NEA:
+    name: 能源数据与全社会用电量
+    authority: 国家能源局
+    url: https://www.nea.gov.cn/
+    access:
+    - html
+    - release_article
+    pit_value: 高：月度发布时间可从公告精确获取
+    notes: 用于全社会及分产业用电量等实体经济高频代理变量。早期长期序列需与统计年鉴/原电力主管部门口径核验。
+  MOT:
+    name: 交通运输经济运行与统计公报
+    authority: 交通运输部
+    url: https://xxgk.mot.gov.cn/
+    access:
+    - html
+    - pdf
+    pit_value: 高：月度经济运行公告可确定可得时点
+    notes: 货运量、港口吞吐、集装箱、交通投资等；历史统计口径和运输方式覆盖需逐段核验。
+  CHINAMONEY:
+    name: 中国货币网/全国银行间同业拆借中心
+    authority: 全国银行间同业拆借中心（经授权的金融市场基础设施）
+    url: https://www.chinamoney.com.cn/
+    access:
+    - html
+    - structured_query
+    - download
+    pit_value: 高：日频市场利率及LPR适合严格按时间戳使用
+    notes: Shibor自2007-01-04正式运行。LPR旧机制2013年起存在；2019-08-20起按改革后机制发布1年期和5年期以上LPR。
+  CHINABOND:
+    name: 中债收益率曲线
+    authority: 中央国债登记结算有限责任公司（金融市场基础设施）
+    url: https://yield.chinabond.com.cn/
+    access:
+    - structured_query
+    - download
+    pit_value: 高：日频利率曲线
+    notes: 中债国债收益率曲线历史较长；财政部自2014-11起每日发布关键期限国债收益率。实际可回溯起点由采集器探测并记录。
+  SSF:
+    name: 全国社会保障基金年度报告
+    authority: 全国社会保障基金理事会
+    url: https://www.ssf.gov.cn/portal/xxgk/fdzdgknr/cwbg/sbjjndbg/
+    access:
+    - html
+    - pdf
+    pit_value: 高（年度资产配置）；股票明细不由社保基金会完整公开
+    notes: 官方年度报告至少可追溯至2001年。投资管理办法要求每年向社会公布财务状况、每季度向主管部门提交报告，但季度投资明细并非面向社会完整公开。
+  A_SHARE_DISCLOSURE:
+    name: A股上市公司定期报告/主要股东披露
+    authority: 沪深北交易所及法定信息披露体系
+    url: https://www.cninfo.com.cn/new/index
+    access:
+    - search
+    - pdf
+    - structured_extraction
+    pit_value: 高但强滞后：股东数据是报告期末快照，必须以实际报告披露时间作为available_ts
+    notes: 用于构造社保基金组合持仓。建议稳定主样本从2004Q3左右起；2003-2004可尽力回溯但披露一致性较弱。退出前十大不等于清仓，新进前十大不等于首次买入。
+series:
+- id: gdp_nominal
+  name_cn: 国内生产总值（现价）
+  domain: growth_output
+  tier: T1
+  frequency: quarterly
+  unit: 亿元
+  economic_meaning: 经济总量与名义增长基准
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 1992Q1_or_earlier
+  history_confidence: medium
+  source_id: NBS_DATA
+  publication_rule: 季后约15-20日，年度/季度发布会；以实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - qoq_sa
+  - yoy_nominal
+  - rolling_4q
+  - surprise
+  research_use:
+  - growth_regime
+  - earnings_cycle
+  methodology_breaks: []
+- id: gdp_real_yoy
+  name_cn: GDP不变价同比增速
+  domain: growth_output
+  tier: T1
+  frequency: quarterly
+  unit: '%'
+  economic_meaning: 真实经济增长速度
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 1992Q1_or_earlier
+  history_confidence: medium
+  source_id: NBS_DATA
+  publication_rule: 季后约15-20日
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change_1q
+  - acceleration
+  - zscore
+  research_use:
+  - growth_regime
+  - asset_allocation
+  methodology_breaks: []
+- id: gdp_qoq_sa
+  name_cn: GDP环比（季调）
+  domain: growth_output
+  tier: T1
+  frequency: quarterly
+  unit: '%'
+  economic_meaning: 短周期真实增长动量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2011Q1_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 季后发布；季调历史可能修订
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - annualized
+  - change
+  - zscore
+  research_use:
+  - growth_nowcast_validation
+  methodology_breaks: []
+- id: gdp_secondary_yoy
+  name_cn: 第二产业增加值同比
+  domain: growth_output
+  tier: T2
+  frequency: quarterly
+  unit: '%'
+  economic_meaning: 工业/建筑业周期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_DATA
+  publication_rule: 季后约15-20日
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: gdp_tertiary_yoy
+  name_cn: 第三产业增加值同比
+  domain: growth_output
+  tier: T2
+  frequency: quarterly
+  unit: '%'
+  economic_meaning: 服务业周期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_DATA
+  publication_rule: 季后约15-20日
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: industrial_va_yoy
+  name_cn: 规模以上工业增加值同比
+  domain: growth_output
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 工业生产的核心月度同步指标
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000M01_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约15-19日；1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - 3m_ma
+  - change
+  - acceleration
+  - surprise
+  research_use:
+  - growth_regime
+  - cyclical_factor_condition
+  methodology_breaks: []
+- id: industrial_va_cum_yoy
+  name_cn: 规模以上工业增加值累计同比
+  domain: growth_output
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 工业生产年内累计趋势
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000M01_or_earlier
+  history_confidence: medium
+  source_id: NBS_DATA
+  publication_rule: 随月度国民经济运行发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: industrial_profit_cum
+  name_cn: 规模以上工业企业利润总额累计
+  domain: growth_output
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 企业盈利周期核心指标
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000M01_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约27日；1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - profit_margin_proxy
+  - acceleration
+  research_use:
+  - earnings_cycle
+  - quality_value_condition
+  methodology_breaks: []
+- id: industrial_revenue_cum
+  name_cn: 规模以上工业企业营业收入累计
+  domain: growth_output
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 工业企业收入景气
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 随工业经济效益报告发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: industrial_capacity_util
+  name_cn: 全国工业产能利用率
+  domain: growth_output
+  tier: T2
+  frequency: quarterly
+  unit: '%'
+  economic_meaning: 产能松紧与利润率环境
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2017Q1
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 季后约15-20日
+  revision_risk: low
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - gap_from_mean
+  research_use:
+  - inflation_regime
+  - profit_margin_cycle
+  methodology_breaks: []
+- id: services_production_yoy
+  name_cn: 服务业生产指数同比
+  domain: growth_output
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 服务业活动月度代理
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2017M01
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: electricity_generation
+  name_cn: 规模以上工业发电量
+  domain: growth_output
+  tier: T2
+  frequency: monthly
+  unit: 亿千瓦时
+  economic_meaning: 实体生产实物量代理
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约15-19日；累计口径可能因样本范围变化不可直接由月值相加
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  research_use:
+  - growth_nowcast
+  - industrial_cycle
+  methodology_breaks: []
+- id: pmi_mfg
+  name_cn: 制造业PMI
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 制造业总体景气扩散指数
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: high
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_production
+  name_cn: 制造业PMI-生产
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 企业当月生产活动
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_new_orders
+  name_cn: 制造业PMI-新订单
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 未来生产需求的订单信号
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_new_export_orders
+  name_cn: 制造业PMI-新出口订单
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 出口需求先行信号
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_backlog
+  name_cn: 制造业PMI-在手订单
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 订单积压与未来工作量
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_finished_inventory
+  name_cn: 制造业PMI-产成品库存
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 库存周期与需求错配
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_purchase_qty
+  name_cn: 制造业PMI-采购量
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 生产备料强度
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_imports
+  name_cn: 制造业PMI-进口
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 进口原料/中间品需求
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_input_price
+  name_cn: 制造业PMI-主要原材料购进价格
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 上游成本压力
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_output_price
+  name_cn: 制造业PMI-出厂价格
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 企业售价与PPI先行代理
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_raw_inventory
+  name_cn: 制造业PMI-原材料库存
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 补库/去库状态
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_employment
+  name_cn: 制造业PMI-从业人员
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 企业用工意愿
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_supplier_delivery
+  name_cn: 制造业PMI-供应商配送时间
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 供应链松紧；合成PMI中为逆指数
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_mfg_expectations
+  name_cn: 制造业PMI-生产经营活动预期
+  domain: pmi_surveys
+  tier: T2
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 企业预期
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2005M01_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  - zscore
+  research_use:
+  - growth_regime
+  - nowcast
+  - conditional_factor_research
+  methodology_breaks: []
+- id: pmi_nonmfg_activity
+  name_cn: 非制造业商务活动指数
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 非制造业总体活动
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2007M01_or_later
+  history_confidence: high
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  research_use:
+  - growth_regime
+  - nowcast
+  methodology_breaks: []
+- id: pmi_nonmfg_new_orders
+  name_cn: 非制造业-新订单
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 服务/建筑未来需求
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2007M01_or_later
+  history_confidence: high
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  research_use:
+  - growth_regime
+  - nowcast
+  methodology_breaks: []
+- id: pmi_nonmfg_input_price
+  name_cn: 非制造业-投入品价格
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 服务与建筑成本压力
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2007M01_or_later
+  history_confidence: high
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  research_use:
+  - growth_regime
+  - nowcast
+  methodology_breaks: []
+- id: pmi_composite_output
+  name_cn: 综合PMI产出指数
+  domain: pmi_surveys
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 制造业生产与非制造业活动的综合产出
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2018M01_publication; trial_backcast_2016_available_in_articles
+  history_confidence: high
+  source_id: NBS_RELEASE
+  publication_rule: 通常在当月月末/次月初9:30发布；2026日程明确PMI为当月指标，春节月份可能调整
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - gap_50
+  - change
+  - 3m_ma
+  research_use:
+  - growth_regime
+  - nowcast
+  methodology_breaks: []
+- id: retail_sales_total
+  name_cn: 社会消费品零售总额
+  domain: consumption
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 居民消费名义总量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；1月多数序列不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: retail_goods_yoy
+  name_cn: 商品零售同比
+  domain: consumption
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 商品消费景气
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；1月多数序列不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: retail_catering_yoy
+  name_cn: 餐饮收入同比
+  domain: consumption
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 线下服务消费景气
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；1月多数序列不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: retail_above_designated_yoy
+  name_cn: 限额以上单位消费品零售额同比
+  domain: consumption
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 大中型零售主体景气
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；1月多数序列不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: online_retail_cum
+  name_cn: 全国网上零售额累计
+  domain: consumption
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 线上消费规模
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2015_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；1月多数序列不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: retail_auto_yoy
+  name_cn: 限额以上汽车类零售额同比
+  domain: consumption
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 汽车消费周期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；1月多数序列不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: retail_home_appliance_yoy
+  name_cn: 限额以上家用电器和音像器材类零售额同比
+  domain: consumption
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 耐用品消费周期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；1月多数序列不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - yoy
+  - mom_or_qoq
+  - change
+  - zscore
+  research_use:
+  - macro_state
+  - conditional_factor_research
+  methodology_breaks: []
+- id: fai_cum_yoy
+  name_cn: 固定资产投资（不含农户）累计同比
+  domain: investment
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 总投资需求
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为年初至今累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - 3m_diff
+  research_use:
+  - growth_regime
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: fai_private_cum_yoy
+  name_cn: 民间固定资产投资累计同比
+  domain: investment
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 民营部门资本开支意愿
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2012_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为年初至今累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - 3m_diff
+  research_use:
+  - growth_regime
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: fai_manufacturing_cum_yoy
+  name_cn: 制造业投资累计同比
+  domain: investment
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 制造业资本开支周期
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2004_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为年初至今累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - 3m_diff
+  research_use:
+  - growth_regime
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: fai_infrastructure_cum_yoy
+  name_cn: 基础设施投资累计同比
+  domain: investment
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 基建需求与财政传导
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2004_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为年初至今累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - 3m_diff
+  research_use:
+  - growth_regime
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: fai_hightech_cum_yoy
+  name_cn: 高技术产业投资累计同比
+  domain: investment
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 新经济资本开支
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2018_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为年初至今累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - 3m_diff
+  research_use:
+  - growth_regime
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: fai_electricity_cum_yoy
+  name_cn: 电力热力燃气及水生产供应业投资累计同比
+  domain: investment
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 能源基础设施资本开支
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2004_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为年初至今累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - 3m_diff
+  research_use:
+  - growth_regime
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: fai_transport_cum_yoy
+  name_cn: 交通运输仓储邮政业投资累计同比
+  domain: investment
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 交通基建资本开支
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2004_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为年初至今累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - 3m_diff
+  research_use:
+  - growth_regime
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_investment
+  name_cn: 房地产开发投资完成额
+  domain: real_estate
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 地产开发总投资
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_residential_invest_yoy
+  name_cn: 住宅开发投资累计同比
+  domain: real_estate
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 住宅建设景气
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_new_start_area
+  name_cn: 房屋新开工面积累计
+  domain: real_estate
+  tier: T1
+  frequency: monthly
+  unit: 万平方米
+  economic_meaning: 开发商新项目启动
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_completion_area
+  name_cn: 房屋竣工面积累计
+  domain: real_estate
+  tier: T2
+  frequency: monthly
+  unit: 万平方米
+  economic_meaning: 地产交付后周期
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_construction_area
+  name_cn: 房屋施工面积累计
+  domain: real_estate
+  tier: T2
+  frequency: monthly
+  unit: 万平方米
+  economic_meaning: 在建工程存量
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_sales_area
+  name_cn: 新建商品房销售面积累计
+  domain: real_estate
+  tier: T1
+  frequency: monthly
+  unit: 万平方米
+  economic_meaning: 住房需求数量
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_sales_value
+  name_cn: 新建商品房销售额累计
+  domain: real_estate
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 住房需求金额
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_inventory_area
+  name_cn: 新建商品房待售面积
+  domain: real_estate
+  tier: T2
+  frequency: monthly
+  unit: 万平方米
+  economic_meaning: 地产库存压力
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_funds_available
+  name_cn: 房地产开发企业本年到位资金
+  domain: real_estate
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 开发商资金来源
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_funds_domestic_loans
+  name_cn: 房地产开发企业到位资金-国内贷款
+  domain: real_estate
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 银行对开发商信用供给
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: re_funds_mortgage
+  name_cn: 房地产开发企业到位资金-个人按揭贷款
+  domain: real_estate
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 居民按揭信用传导
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常随月度国民经济运行在月后约15-19日发布；主要为累计值/累计同比，1月通常不单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - single_month_implied_yoy
+  - change
+  - acceleration
+  research_use:
+  - property_cycle
+  - credit_cycle
+  - cyclical_industry_condition
+  methodology_breaks: []
+- id: house_price_new_70
+  name_cn: 70个大中城市新建商品住宅价格指数（城市级）
+  domain: real_estate
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 核心城市新房价格变化
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2011M01_current_method
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约15-19日单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - city_mom
+  - city_yoy
+  - breadth_up
+  - median_mom
+  - tier_city_aggregation
+  research_use:
+  - property_cycle
+  - risk_appetite
+  methodology_breaks:
+  - 2011-01新统计方案
+  - 对比基期定期轮换；2026-01起使用2025年为新一轮基期
+- id: house_price_secondhand_70
+  name_cn: 70个大中城市二手住宅价格指数（城市级）
+  domain: real_estate
+  tier: T1
+  frequency: monthly
+  unit: 指数
+  economic_meaning: 核心城市二手房价格变化
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2011M01_current_method
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约15-19日单独发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - city_mom
+  - city_yoy
+  - breadth_up
+  - median_mom
+  research_use:
+  - property_cycle
+  - household_balance_sheet
+  methodology_breaks:
+  - 2011-01新统计方案
+  - 调查方法与基期存在阶段调整
+- id: cpi_yoy
+  name_cn: CPI同比
+  domain: inflation_prices
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 居民消费价格总水平
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: medium
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: cpi_mom
+  name_cn: CPI环比
+  domain: inflation_prices
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 短期消费价格动量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: medium
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: cpi_core_yoy
+  name_cn: 核心CPI同比（不含食品和能源）
+  domain: inflation_prices
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 需求型通胀压力
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2013_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: medium
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: cpi_food_yoy
+  name_cn: CPI食品价格同比
+  domain: inflation_prices
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 食品供需与民生通胀
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: medium
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: cpi_nonfood_yoy
+  name_cn: CPI非食品价格同比
+  domain: inflation_prices
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 非食品通胀
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: medium
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: cpi_services_yoy
+  name_cn: CPI服务价格同比
+  domain: inflation_prices
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 服务业价格黏性
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: medium
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: ppi_yoy
+  name_cn: PPI工业生产者出厂价格同比
+  domain: inflation_prices
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 工业品价格与利润周期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: low
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: ppi_mom
+  name_cn: PPI环比
+  domain: inflation_prices
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 上游价格短期动量
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: low
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: ppi_means_production_yoy
+  name_cn: PPI生产资料同比
+  domain: inflation_prices
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 上游/中游成本与需求
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: low
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: ppirm_yoy
+  name_cn: 工业生产者购进价格同比
+  domain: inflation_prices
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 工业投入成本压力
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 通常月后约9-14日9:30发布；按实际日程和公告时间记录
+  revision_risk: low
+  pit_risk: medium
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - acceleration
+  - zscore
+  - surprise
+  research_use:
+  - inflation_regime
+  - real_rate
+  - sector_rotation
+  methodology_breaks: []
+- id: m0_balance
+  name_cn: M0余额
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 万亿元
+  economic_meaning: 流通中现金
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 1990s_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: m1_balance
+  name_cn: M1余额
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 万亿元
+  economic_meaning: 企业活期资金与交易性货币
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 1990s_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: m2_balance
+  name_cn: M2余额
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 万亿元
+  economic_meaning: 广义货币存量
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 1990s_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: rmb_loans_balance
+  name_cn: 人民币贷款余额
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 万亿元
+  economic_meaning: 银行信用存量
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: rmb_loans_flow
+  name_cn: 人民币贷款新增
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 当期银行信用脉冲
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: household_short_loan_flow
+  name_cn: 住户短期贷款新增
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 居民短期消费/经营信用
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2007_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: household_medium_long_loan_flow
+  name_cn: 住户中长期贷款新增
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 居民按揭与长期杠杆
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2007_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: corp_short_loan_flow
+  name_cn: 企事业单位短期贷款新增
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 企业营运资金信用
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2007_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: corp_medium_long_loan_flow
+  name_cn: 企事业单位中长期贷款新增
+  domain: money_credit
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 企业资本开支信用
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2007_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: bill_financing_flow
+  name_cn: 票据融资新增
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 短期信用与银行资产配置
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 2007_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: rmb_deposits_balance
+  name_cn: 人民币存款余额
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 万亿元
+  economic_meaning: 金融体系存款基础
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks: []
+- id: tsf_flow
+  name_cn: 社会融资规模增量
+  domain: money_credit
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 实体经济从金融体系获得的新增融资
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2002_history; official_publication_from_2011
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks:
+  - 金融统计范围和社融构成多次调整；使用官方可比口径并保存methodology_version
+- id: tsf_stock
+  name_cn: 社会融资规模存量
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 万亿元
+  economic_meaning: 实体经济融资存量
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2002_history_backcast
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks:
+  - 金融统计范围和社融构成多次调整；使用官方可比口径并保存methodology_version
+- id: tsf_rmb_loan_flow
+  name_cn: 社融-对实体经济人民币贷款
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 表内人民币信用
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2002_history
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks:
+  - 金融统计范围和社融构成多次调整；使用官方可比口径并保存methodology_version
+- id: tsf_trust_loan_flow
+  name_cn: 社融-信托贷款
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 影子银行信用
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2006_or_later
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks:
+  - 金融统计范围和社融构成多次调整；使用官方可比口径并保存methodology_version
+- id: tsf_entrusted_loan_flow
+  name_cn: 社融-委托贷款
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 表外委托信用
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2002_history
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks:
+  - 金融统计范围和社融构成多次调整；使用官方可比口径并保存methodology_version
+- id: tsf_corp_bond_flow
+  name_cn: 社融-企业债券净融资
+  domain: money_credit
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 直接债务融资
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2002_history
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks:
+  - 金融统计范围和社融构成多次调整；使用官方可比口径并保存methodology_version
+- id: tsf_gov_bond_flow
+  name_cn: 社融-政府债券净融资
+  domain: money_credit
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 政府融资对总信用的贡献
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2019_or_earlier_under_current_component
+  history_confidence: medium
+  source_id: PBOC_STATS
+  publication_rule: 通常次月约9-15日发布，日期并非固定；必须抓实际公告时间，且保留口径注释
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - flow_to_gdp
+  - change
+  - acceleration
+  - 12m_sum
+  - zscore
+  research_use:
+  - credit_cycle
+  - liquidity_regime
+  - smallcap_growth_condition
+  methodology_breaks:
+  - 金融统计范围和社融构成多次调整；使用官方可比口径并保存methodology_version
+- id: shibor_on
+  name_cn: Shibor ON
+  domain: rates_liquidity
+  tier: T1
+  frequency: daily
+  unit: '%'
+  economic_meaning: 银行间无担保资金价格/期限预期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: '2007-01-04'
+  history_confidence: high
+  source_id: CHINAMONEY
+  publication_rule: 交易日约11:00发布
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change_1d
+  - change_5d
+  - vol_20d
+  - spread_to_policy
+  research_use:
+  - liquidity_regime
+  - risk_overlay
+  methodology_breaks: []
+- id: shibor_1w
+  name_cn: Shibor 1W
+  domain: rates_liquidity
+  tier: T1
+  frequency: daily
+  unit: '%'
+  economic_meaning: 银行间无担保资金价格/期限预期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: '2007-01-04'
+  history_confidence: high
+  source_id: CHINAMONEY
+  publication_rule: 交易日约11:00发布
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change_1d
+  - change_5d
+  - vol_20d
+  - spread_to_policy
+  research_use:
+  - liquidity_regime
+  - risk_overlay
+  methodology_breaks: []
+- id: shibor_3m
+  name_cn: Shibor 3M
+  domain: rates_liquidity
+  tier: T1
+  frequency: daily
+  unit: '%'
+  economic_meaning: 银行间无担保资金价格/期限预期
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: '2007-01-04'
+  history_confidence: high
+  source_id: CHINAMONEY
+  publication_rule: 交易日约11:00发布
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change_1d
+  - change_5d
+  - vol_20d
+  - spread_to_policy
+  research_use:
+  - liquidity_regime
+  - risk_overlay
+  methodology_breaks: []
+- id: dr007
+  name_cn: DR007
+  domain: rates_liquidity
+  tier: T1
+  frequency: daily
+  unit: '%'
+  economic_meaning: 存款类机构质押式回购7天加权利率，核心银行间流动性价格
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2014_or_later_verify
+  history_confidence: low
+  source_id: CHINAMONEY
+  publication_rule: 交易日盘后形成；以官方日终数据时间戳为准
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - ma_5d
+  - gap_to_omo7d
+  - vol_20d
+  research_use:
+  - liquidity_regime
+  - equity_duration_condition
+  methodology_breaks: []
+- id: r007
+  name_cn: R007
+  domain: rates_liquidity
+  tier: T1
+  frequency: daily
+  unit: '%'
+  economic_meaning: 全市场质押式回购7天加权利率
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s_verify
+  history_confidence: medium
+  source_id: CHINAMONEY
+  publication_rule: 交易日盘后形成
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - spread_dr007
+  - ma_5d
+  research_use:
+  - liquidity_stress
+  methodology_breaks: []
+- id: omo_7d_rate
+  name_cn: 7天期逆回购操作利率
+  domain: rates_liquidity
+  tier: T1
+  frequency: event/daily
+  unit: '%'
+  economic_meaning: 央行短端政策利率/操作价格
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2012_or_later_verify
+  history_confidence: medium
+  source_id: PBOC_POLICY
+  publication_rule: 发生操作当日公告
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - event_change_bp
+  - days_since_change
+  research_use:
+  - policy_regime
+  - event_study
+  methodology_breaks: []
+- id: mlf_1y_rate
+  name_cn: 1年期MLF操作利率
+  domain: rates_liquidity
+  tier: T1
+  frequency: event/monthly
+  unit: '%'
+  economic_meaning: 中期政策利率
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2014-09_or_later
+  history_confidence: medium
+  source_id: PBOC_POLICY
+  publication_rule: MLF操作当日公告
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - event_change_bp
+  research_use:
+  - policy_regime
+  - loan_pricing
+  methodology_breaks: []
+- id: lpr_1y
+  name_cn: LPR 1年期
+  domain: rates_liquidity
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 贷款市场基准报价
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2013-10_old; 2019-08-20_reformed
+  history_confidence: medium
+  source_id: CHINAMONEY
+  publication_rule: 每月20日（遇节假日顺延）发布；改革前后机制不可直接同质处理
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change_bp
+  - spread_mlf
+  research_use:
+  - credit_price
+  - policy_transmission
+  methodology_breaks:
+  - 2019-08-20改革完善LPR形成机制
+- id: lpr_5y
+  name_cn: LPR 5年期以上
+  domain: rates_liquidity
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 按揭和长期贷款定价基准
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: '2019-08-20'
+  history_confidence: medium
+  source_id: CHINAMONEY
+  publication_rule: 每月20日（遇节假日顺延）发布
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change_bp
+  - spread_1y
+  research_use:
+  - property_cycle
+  - credit_price
+  methodology_breaks: []
+- id: gov_bond_1y
+  name_cn: 中债国债到期收益率1年
+  domain: rates_liquidity
+  tier: T1
+  frequency: daily
+  unit: '%'
+  economic_meaning: 无风险短端利率
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 1999_or_later_verify
+  history_confidence: medium
+  source_id: CHINABOND
+  publication_rule: 交易日日终
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - real_rate_cpi
+  research_use:
+  - discount_rate
+  - liquidity_regime
+  methodology_breaks: []
+- id: gov_bond_10y
+  name_cn: 中债国债到期收益率10年
+  domain: rates_liquidity
+  tier: T1
+  frequency: daily
+  unit: '%'
+  economic_meaning: 长期无风险利率与增长/通胀预期
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 1999_or_later_verify
+  history_confidence: medium
+  source_id: CHINABOND
+  publication_rule: 交易日日终
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - term_spread_10y1y
+  - real_rate
+  research_use:
+  - valuation_discount_rate
+  - macro_expectations
+  methodology_breaks: []
+- id: rrr_large_banks
+  name_cn: 大型银行存款准备金率
+  domain: rates_liquidity
+  tier: T2
+  frequency: event
+  unit: '%'
+  economic_meaning: 数量型货币政策约束
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 1990s_or_earlier
+  history_confidence: medium
+  source_id: PBOC_POLICY
+  publication_rule: 政策公告生效日与公告日均需记录
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - event_change_bp
+  - days_since_change
+  research_use:
+  - policy_regime
+  methodology_breaks: []
+- id: benchmark_loan_1y
+  name_cn: 历史1年期贷款基准利率
+  domain: rates_liquidity
+  tier: T2
+  frequency: event
+  unit: '%'
+  economic_meaning: 2019年前贷款定价行政/政策基准
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 1990s_or_earlier
+  history_confidence: medium
+  source_id: PBOC_POLICY
+  publication_rule: 政策事件日
+  revision_risk: low
+  pit_risk: low
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - event_change_bp
+  research_use:
+  - historical_policy_regime
+  methodology_breaks:
+  - 2019-08后LPR成为主要贷款定价参考
+- id: fiscal_revenue
+  name_cn: 全国一般公共预算收入累计
+  domain: fiscal
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 财政收入能力与名义经济活动
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: tax_revenue
+  name_cn: 全国税收收入累计
+  domain: fiscal
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 税基与企业/居民名义活动
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: vat_revenue
+  name_cn: 国内增值税累计
+  domain: fiscal
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 工业/服务销售税基
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: corp_income_tax
+  name_cn: 企业所得税累计
+  domain: fiscal
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 企业盈利税基
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: personal_income_tax
+  name_cn: 个人所得税累计
+  domain: fiscal
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 居民收入税基
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: fiscal_expenditure
+  name_cn: 全国一般公共预算支出累计
+  domain: fiscal
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 财政支出脉冲
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: fiscal_scitech_spend
+  name_cn: 科学技术支出累计
+  domain: fiscal
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 科技财政投入
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: gov_fund_revenue
+  name_cn: 全国政府性基金预算收入累计
+  domain: fiscal
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 政府性基金收入，含土地相关收入影响
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2010_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: land_transfer_revenue
+  name_cn: 地方国有土地使用权出让收入累计
+  domain: fiscal
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 土地财政与地产链
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2010_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: gov_fund_expenditure
+  name_cn: 全国政府性基金预算支出累计
+  domain: fiscal
+  tier: T1
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 专项性财政支出
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2010_or_earlier
+  history_confidence: medium
+  source_id: MOF_FISCAL
+  publication_rule: 多为月度累计值，通常次月中下旬公布；2月常合并1-2月；必须记录实际公告时间
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied_yoy
+  - 12m_sum
+  - fiscal_impulse_proxy
+  research_use:
+  - fiscal_regime
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: exports_usd
+  name_cn: 出口金额（美元）
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 亿美元
+  economic_meaning: 外需与出口收入
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks:
+  - HS编码版本、贸易伙伴口径、人民币/美元换算口径需版本化
+- id: imports_usd
+  name_cn: 进口金额（美元）
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 亿美元
+  economic_meaning: 国内需求与中间品/资源需求
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks:
+  - HS编码版本、贸易伙伴口径、人民币/美元换算口径需版本化
+- id: trade_balance_usd
+  name_cn: 贸易差额（美元）
+  domain: external_trade
+  tier: T1
+  frequency: monthly
+  unit: 亿美元
+  economic_meaning: 货物贸易净流入
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks: []
+- id: general_trade_exports
+  name_cn: 一般贸易出口金额
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 亿元/亿美元
+  economic_meaning: 一般贸易外需
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks: []
+- id: processing_trade_exports
+  name_cn: 加工贸易出口金额
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 亿元/亿美元
+  economic_meaning: 全球制造链景气
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks: []
+- id: exports_asean
+  name_cn: 对东盟出口金额
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 亿元/亿美元
+  economic_meaning: 东盟外需
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks:
+  - HS编码版本、贸易伙伴口径、人民币/美元换算口径需版本化
+- id: exports_us
+  name_cn: 对美国出口金额
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 亿元/亿美元
+  economic_meaning: 美国外需与贸易政策暴露
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks:
+  - HS编码版本、贸易伙伴口径、人民币/美元换算口径需版本化
+- id: imports_crude_oil_volume
+  name_cn: 原油进口量
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 万吨
+  economic_meaning: 能源需求和炼化活动
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks:
+  - HS编码版本、贸易伙伴口径、人民币/美元换算口径需版本化
+- id: imports_iron_ore_volume
+  name_cn: 铁矿砂及其精矿进口量
+  domain: external_trade
+  tier: T2
+  frequency: monthly
+  unit: 万吨
+  economic_meaning: 钢铁/地产/基建需求代理
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: CUSTOMS
+  publication_rule: 通常次月上旬至中旬发布月度/累计外贸数据；精确日期按海关总署公告记录
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_query_platform; archive raw parameter dictionaries
+  recommended_features:
+  - yoy
+  - mom_sa_if_constructed
+  - 3m_ma
+  - contribution
+  - surprise
+  research_use:
+  - external_demand_regime
+  - export_sector_condition
+  methodology_breaks:
+  - HS编码版本、贸易伙伴口径、人民币/美元换算口径需版本化
+- id: fx_reserves
+  name_cn: 国家外汇储备余额
+  domain: fx_bop
+  tier: T1
+  frequency: monthly
+  unit: 亿美元
+  economic_meaning: 官方储备资产规模
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 1990s_or_earlier
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 按国家外汇管理局年度发布时间表；月度指标通常发布上月数据，实际日期必须抓取
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - 3m_sum
+  - zscore
+  research_use:
+  - external_liquidity
+  - fx_pressure
+  - risk_appetite
+  methodology_breaks: []
+- id: bank_fx_settlement
+  name_cn: 银行结汇
+  domain: fx_bop
+  tier: T2
+  frequency: monthly
+  unit: 亿美元/亿元
+  economic_meaning: 境内主体结汇流量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2013_full_scope; earlier_agent_scope
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 按国家外汇管理局年度发布时间表；月度指标通常发布上月数据，实际日期必须抓取
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - 3m_sum
+  - zscore
+  research_use:
+  - external_liquidity
+  - fx_pressure
+  - risk_appetite
+  methodology_breaks: []
+- id: bank_fx_sales
+  name_cn: 银行售汇
+  domain: fx_bop
+  tier: T2
+  frequency: monthly
+  unit: 亿美元/亿元
+  economic_meaning: 境内主体购汇流量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2013_full_scope; earlier_agent_scope
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 按国家外汇管理局年度发布时间表；月度指标通常发布上月数据，实际日期必须抓取
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - 3m_sum
+  - zscore
+  research_use:
+  - external_liquidity
+  - fx_pressure
+  - risk_appetite
+  methodology_breaks: []
+- id: crossborder_receipts
+  name_cn: 银行代客涉外收入
+  domain: fx_bop
+  tier: T2
+  frequency: monthly
+  unit: 亿美元/亿元
+  economic_meaning: 非银行部门跨境资金流入
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2010s_verify
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 按国家外汇管理局年度发布时间表；月度指标通常发布上月数据，实际日期必须抓取
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - 3m_sum
+  - zscore
+  research_use:
+  - external_liquidity
+  - fx_pressure
+  - risk_appetite
+  methodology_breaks: []
+- id: crossborder_payments
+  name_cn: 银行代客涉外支出
+  domain: fx_bop
+  tier: T2
+  frequency: monthly
+  unit: 亿美元/亿元
+  economic_meaning: 非银行部门跨境资金流出
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2010s_verify
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 按国家外汇管理局年度发布时间表；月度指标通常发布上月数据，实际日期必须抓取
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - 3m_sum
+  - zscore
+  research_use:
+  - external_liquidity
+  - fx_pressure
+  - risk_appetite
+  methodology_breaks: []
+- id: bop_current_account
+  name_cn: 国际收支-经常账户差额
+  domain: fx_bop
+  tier: T2
+  frequency: quarterly
+  unit: 亿美元
+  economic_meaning: 经常账户净流入
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 1982_or_later_verify
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 季度初步数约季后1个半月；正式数更晚，以年度发布时间表为准
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - pct_gdp
+  - 4q_sum
+  - change
+  research_use:
+  - external_balance
+  methodology_breaks: []
+- id: bop_financial_account
+  name_cn: 国际收支-资本和金融账户差额
+  domain: fx_bop
+  tier: T2
+  frequency: quarterly
+  unit: 亿美元
+  economic_meaning: 跨境资本流动
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 1982_or_later_verify
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 正式数按季度发布
+  revision_risk: high
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - pct_gdp
+  - 4q_sum
+  research_use:
+  - external_liquidity
+  methodology_breaks: []
+- id: external_debt
+  name_cn: 中国外债余额
+  domain: fx_bop
+  tier: T3
+  frequency: quarterly
+  unit: 亿美元
+  economic_meaning: 外部杠杆和偿付压力
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000_or_earlier
+  history_confidence: medium
+  source_id: SAFE
+  publication_rule: 季度正式数按发布时间表
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - pct_gdp
+  - short_term_share
+  - change
+  research_use:
+  - macro_risk
+  methodology_breaks: []
+- id: surveyed_unemployment
+  name_cn: 全国城镇调查失业率
+  domain: employment_income
+  tier: T1
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 全国劳动力市场松紧
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2018M01_public_release
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 2018-04起按月正式对外发布；通常随月度国民经济运行公布
+  revision_risk: low
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  - 3m_ma
+  research_use:
+  - growth_regime
+  - consumption_condition
+  methodology_breaks:
+  - 2005建立全国劳动力调查；2016建立全国月度劳动力调查；2018起正式按月对外发布
+- id: surveyed_unemployment_31cities
+  name_cn: 31个大城市城镇调查失业率
+  domain: employment_income
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 大城市劳动力市场松紧
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2018M01_public_release; survey_exists_2009
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 随月度就业数据发布
+  revision_risk: low
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  research_use:
+  - urban_demand
+  methodology_breaks:
+  - 2009建立31个大城市月度调查；2018起正式按月公开
+- id: unemployment_16_24_ex_students
+  name_cn: 16-24岁劳动力失业率（不含在校生）
+  domain: employment_income
+  tier: T2
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 青年劳动力市场压力
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2023M12_or_later_new_method
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 月度发布
+  revision_risk: low
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  research_use:
+  - consumption_risk
+  methodology_breaks:
+  - 2023年后采用不含在校生的新口径，勿与旧16-24岁口径直接拼接
+- id: unemployment_25_29
+  name_cn: 25-29岁劳动力失业率
+  domain: employment_income
+  tier: T3
+  frequency: monthly
+  unit: '%'
+  economic_meaning: 青年成熟劳动力市场压力
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2023M12_or_later
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 月度发布
+  revision_risk: low
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - change
+  research_use:
+  - consumption_risk
+  methodology_breaks: []
+- id: urban_new_jobs
+  name_cn: 城镇新增就业人数累计
+  domain: employment_income
+  tier: T2
+  frequency: monthly
+  unit: 万人
+  economic_meaning: 就业新增规模
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 月度/阶段性发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - cum_yoy
+  - single_month_implied
+  research_use:
+  - labor_cycle
+  methodology_breaks: []
+- id: disposable_income_pc
+  name_cn: 全国居民人均可支配收入
+  domain: employment_income
+  tier: T2
+  frequency: quarterly
+  unit: 元
+  economic_meaning: 居民收入增长与消费能力
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2013Q1_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 季度国民经济运行发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy_nominal
+  - yoy_real
+  - urban_rural_gap
+  research_use:
+  - consumption_regime
+  methodology_breaks:
+  - 城乡一体化住户调查口径存在制度变更
+- id: percapita_consumption
+  name_cn: 全国居民人均消费支出
+  domain: employment_income
+  tier: T2
+  frequency: quarterly
+  unit: 元
+  economic_meaning: 居民实际消费能力与倾向
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2013Q1_or_earlier
+  history_confidence: medium
+  source_id: NBS_RELEASE
+  publication_rule: 季度国民经济运行发布
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy_nominal
+  - yoy_real
+  - propensity_to_consume
+  research_use:
+  - consumption_regime
+  methodology_breaks: []
+- id: power_consumption_total
+  name_cn: 全社会用电量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿千瓦时
+  economic_meaning: 全经济用电实物量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2011_or_earlier_verify
+  history_confidence: low
+  source_id: NEA
+  publication_rule: 国家能源局通常在次月中下旬发布上月/累计用电量；实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  - weather_adjusted_if_possible
+  research_use:
+  - growth_nowcast
+  - industrial_cycle
+  methodology_breaks: []
+- id: power_consumption_secondary
+  name_cn: 第二产业用电量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿千瓦时
+  economic_meaning: 工业与建筑活动
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2011_or_earlier_verify
+  history_confidence: low
+  source_id: NEA
+  publication_rule: 国家能源局通常在次月中下旬发布上月/累计用电量；实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  - weather_adjusted_if_possible
+  research_use:
+  - growth_nowcast
+  - industrial_cycle
+  methodology_breaks: []
+- id: power_consumption_industry
+  name_cn: 工业用电量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿千瓦时
+  economic_meaning: 工业活动更直接代理
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2011_or_earlier_verify
+  history_confidence: low
+  source_id: NEA
+  publication_rule: 国家能源局通常在次月中下旬发布上月/累计用电量；实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  - weather_adjusted_if_possible
+  research_use:
+  - growth_nowcast
+  - industrial_cycle
+  methodology_breaks: []
+- id: power_consumption_tertiary
+  name_cn: 第三产业用电量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿千瓦时
+  economic_meaning: 服务业活动代理
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2011_or_earlier_verify
+  history_confidence: low
+  source_id: NEA
+  publication_rule: 国家能源局通常在次月中下旬发布上月/累计用电量；实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  - weather_adjusted_if_possible
+  research_use:
+  - growth_nowcast
+  - industrial_cycle
+  methodology_breaks: []
+- id: power_consumption_residential
+  name_cn: 城乡居民生活用电量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿千瓦时
+  economic_meaning: 居民用电与天气/消费活动
+  lead_lag:
+    class: mixed
+    relative_to: A股/实体经济综合
+  history_start_target: 2011_or_earlier_verify
+  history_confidence: low
+  source_id: NEA
+  publication_rule: 国家能源局通常在次月中下旬发布上月/累计用电量；实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  - weather_adjusted_if_possible
+  research_use:
+  - growth_nowcast
+  - industrial_cycle
+  methodology_breaks: []
+- id: freight_total
+  name_cn: 营业性货运量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿吨
+  economic_meaning: 全社会货运实物量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s_verify
+  history_confidence: low
+  source_id: MOT
+  publication_rule: 交通运输部通常在次月下旬发布经济运行情况；历史月份可能合并，实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  research_use:
+  - growth_nowcast
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: freight_road
+  name_cn: 公路货运量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿吨
+  economic_meaning: 国内物流与生产活动
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s_verify
+  history_confidence: low
+  source_id: MOT
+  publication_rule: 交通运输部通常在次月下旬发布经济运行情况；历史月份可能合并，实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  research_use:
+  - growth_nowcast
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: port_cargo
+  name_cn: 港口货物吞吐量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿吨
+  economic_meaning: 内外贸实物流量
+  lead_lag:
+    class: synchronous
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s_verify
+  history_confidence: low
+  source_id: MOT
+  publication_rule: 交通运输部通常在次月下旬发布经济运行情况；历史月份可能合并，实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  research_use:
+  - growth_nowcast
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: port_container
+  name_cn: 港口集装箱吞吐量
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 万TEU
+  economic_meaning: 制造业与外贸高频代理
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s_verify
+  history_confidence: low
+  source_id: MOT
+  publication_rule: 交通运输部通常在次月下旬发布经济运行情况；历史月份可能合并，实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  research_use:
+  - growth_nowcast
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: transport_fai
+  name_cn: 交通固定资产投资
+  domain: energy_transport
+  tier: T2
+  frequency: monthly
+  unit: 亿元
+  economic_meaning: 交通基建资本开支
+  lead_lag:
+    class: leading
+    relative_to: A股/实体经济综合
+  history_start_target: 2000s_verify
+  history_confidence: low
+  source_id: MOT
+  publication_rule: 交通运输部通常在次月下旬发布经济运行情况；历史月份可能合并，实际公告时间为准
+  revision_risk: medium
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - 3m_ma
+  - acceleration
+  research_use:
+  - growth_nowcast
+  - infrastructure_cycle
+  methodology_breaks: []
+- id: nssf_assets_total
+  name_cn: 全国社会保障基金资产总额
+  domain: institutional_nssf
+  tier: T3
+  frequency: annual
+  unit: 亿元
+  economic_meaning: 全国社保基金资产规模
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: '2001'
+  history_confidence: high
+  source_id: SSF
+  publication_rule: 年度报告次年披露；按实际发布日期
+  revision_risk: low
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - yoy
+  - equity_share_if_available
+  research_use:
+  - institutional_structure
+  methodology_breaks: []
+- id: nssf_annual_investment_return
+  name_cn: 全国社保基金年度投资收益率
+  domain: institutional_nssf
+  tier: T3
+  frequency: annual
+  unit: '%'
+  economic_meaning: 长期机构年度投资表现
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2001_or_later
+  history_confidence: medium
+  source_id: SSF
+  publication_rule: 年度报告次年披露
+  revision_risk: low
+  pit_risk: high
+  acquisition: official_table_or_release
+  recommended_features:
+  - level
+  - rolling_3y
+  - rolling_5y
+  research_use:
+  - institutional_structure
+  methodology_breaks: []
+- id: nssf_stock_snapshot
+  name_cn: 社保基金组合A股季度末持仓快照（由上市公司主要股东披露重建）
+  domain: institutional_nssf
+  tier: T2
+  frequency: quarterly
+  unit: 股
+  economic_meaning: 社保组合在个股季度末可见持仓
+  lead_lag:
+    class: lagging
+    relative_to: A股/实体经济综合
+  history_start_target: 2004Q3_recommended_main_sample
+  history_confidence: medium
+  source_id: A_SHARE_DISCLOSURE
+  publication_rule: 按各上市公司定期报告实际披露时间；不是季末即可得
+  revision_risk: low
+  pit_risk: very_high
+  acquisition: parse listed-company periodic reports; normalize shareholder names; keep filing timestamp
+  recommended_features:
+  - shares
+  - float_pct
+  - market_value_at_period_end
+  research_use:
+  - institutional_alpha
+  - quality_signal
+  methodology_breaks:
+  - 2003-2004可存在零散可见记录，但前十大流通股股东披露一致性较弱
+  - 股权分置改革前后“流通股”口径变化
+derived_feature_catalog:
+- id: yoy
+  formula: x_t / x_{t-12} - 1
+  note: 月度；季度对应t-4
+- id: mom
+  formula: x_t / x_{t-1} - 1
+  note: 必要时季调；原始累计值不可直接使用
+- id: qoq_sa
+  formula: 季调环比
+  note: 优先使用官方季调；否则记录自建季调版本
+- id: change
+  formula: x_t - x_{t-1}
+- id: acceleration
+  formula: growth_t - growth_{t-1}
+  note: 用于边际改善/恶化
+- id: zscore
+  formula: (x_t - rolling_mean) / rolling_std
+  note: 只用历史窗口
+- id: percentile
+  formula: expanding_or_rolling_percentile
+  note: 禁止使用全样本分位数回填历史
+- id: 3m_ma
+  formula: mean(x_t,x_{t-1},x_{t-2})
+- id: 12m_sum
+  formula: rolling_sum_12m(flow)
+- id: single_month_implied
+  formula: cum_t - cum_{t-1}
+  note: 仅在统计口径允许时使用；样本范围变化序列需禁用
+- id: credit_impulse
+  formula: Δ(12m_new_credit / nominal_GDP)
+  note: 定义必须版本化
+- id: m1_m2_gap
+  formula: M1_yoy - M2_yoy
+- id: real_rate
+  formula: nominal_rate - inflation_expectation_or_CPI
+  note: 明确使用事后CPI还是实时预期
+- id: term_spread_10y1y
+  formula: gov10y - gov1y
+- id: dr007_policy_gap
+  formula: DR007 - OMO7D
+- id: property_sales_price
+  formula: sales_value / sales_area
+  note: 仅作全国均价代理，结构效应强
+- id: price_breadth_70city
+  formula: share(city_mom>0)
+  note: 新房/二手房分别计算
+- id: macro_surprise
+  formula: actual_release - consensus_before_release
+  note: 需要另接实时一致预期数据；官方源本身不提供
+- id: release_event_return
+  formula: asset_return after release_ts over fixed window
+  note: 用于事件研究而非月末对齐
+- id: regime_growth
+  formula: latent_factor(PMI,new_orders,industrial_va,credit,freight,...)
+- id: regime_inflation
+  formula: latent_factor(CPI_core,PPI,PMI_prices,...)
+- id: regime_credit
+  formula: latent_factor(TSF,M1,corp_ML_loans,credit_impulse,...)
+- id: regime_liquidity
+  formula: latent_factor(DR007,Shibor,policy_gap,yield_curve,...)
+- id: regime_external
+  formula: latent_factor(exports,FX settlement,crossborder flows,CNY,...)
+- id: nssf_visibility_state
+  formula: observable / censored / unknown
+  note: 社保持仓研究必须先建可见性状态机
+suggested_tables:
+  macro_raw:
+  - series_id
+  - observation_start
+  - observation_end
+  - period_label
+  - value
+  - unit
+  - seasonal_adjustment
+  - preliminary
+  - methodology_version
+  - source_url
+  - raw_hash
+  macro_vintage:
+  - series_id
+  - observation_end
+  - release_ts
+  - available_ts
+  - vintage_ts
+  - value
+  - revision_seq
+  - source_url
+  - fetched_at
+  macro_feature:
+  - feature_id
+  - series_id
+  - asof_ts
+  - value
+  - transform_version
+  - lookback
+  - source_vintage_cutoff
+  macro_regime:
+  - asof_ts
+  - growth_state
+  - inflation_state
+  - credit_state
+  - liquidity_state
+  - external_state
+  - model_version
+  - training_end_ts
+  institutional_snapshot:
+  - ticker
+  - report_period
+  - shareholder_normalized
+  - portfolio_id
+  - shares
+  - float_pct
+  - filing_ts
+  - source_url
+  - visibility_state
+implementation_phases:
+- phase: P0
+  goal: 基础框架
+  deliverables:
+  - source registry
+  - schema migrations
+  - raw/vintage tables
+  - release timestamp parser
+  - content hashing
+  - manifest
+- phase: P1
+  goal: T1核心宏观
+  deliverables:
+  - NBS核心
+  - PBOC货币/社融
+  - 利率
+  - 地产
+  - CPI/PPI
+  - 海关
+  - 财政
+- phase: P2
+  goal: T2 Nowcast/结构层
+  deliverables:
+  - PMI细分
+  - 能源
+  - 交通
+  - 外汇流动
+  - 细分消费/投资
+- phase: P3
+  goal: 机构行为层
+  deliverables:
+  - 社保基金年度数据
+  - 上市公司报告股东解析
+  - censoring-aware社保持仓因子
+- phase: P4
+  goal: 研究层
+  deliverables:
+  - derived features
+  - macro regime model
+  - conditional factor efficacy matrix
+  - walk-forward evaluation
+quality_gates:
+- 每个序列记录first_non_null、last_non_null、missing_ratio、duplicate_count、revision_count。
+- 每个序列至少抽样5个历史时点与官方原文人工/自动双重核验。
+- release_ts缺失的观测不得进入严格PIT回测，只能进入exploratory标签数据集。
+- 口径变更必须有break记录和测试用例。
+- 截至2026-08-25的最新月份必须能与官方最新公告对齐，允许官方尚未发布造成的自然缺失。
+- 所有派生因子必须有可复现formula/version，并验证不会读取未来vintage。

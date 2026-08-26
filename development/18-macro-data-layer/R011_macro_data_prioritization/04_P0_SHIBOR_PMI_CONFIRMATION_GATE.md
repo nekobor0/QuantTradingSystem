@@ -1,6 +1,8 @@
 # R011 P0 + Shibor / PMI 样板确认门
 
-状态：`VALIDATED_PENDING_HUMAN_CONFIRMATION`
+状态：`DECISIONS_CONFIRMED_SUPERSEDED_BY_BACKFILL_AUDIT`
+
+> D1—D5 已于 2026-08-26 全部确认并执行。正式回填、质量结论和当前 readiness 以 [05_P0_SHIBOR_PMI_BACKFILL_AUDIT.md](05_P0_SHIBOR_PMI_BACKFILL_AUDIT.md) 为准；本文保留为确认门历史记录。
 
 生成日期：2026-08-25（Asia/Shanghai）
 
