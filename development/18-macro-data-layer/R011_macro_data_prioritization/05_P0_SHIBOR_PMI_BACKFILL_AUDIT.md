@@ -1,5 +1,7 @@
 # R011 P0 Shibor / PMI 正式回填与数据质量审计
 
+> 2026-08-26 后续更新：2010-04 六项 PMI 已由用户复核的国家数据导出补齐，当前数值缺月为 0；由于导出不提供历史可见时点，全历史 PIT 门禁仍关闭。下文保留补齐前审计快照，最终结论见 [09_PMI_201004_MANUAL_LANDING_AUDIT.md](09_PMI_201004_MANUAL_LANDING_AUDIT.md)。
+
 状态：`COMPLETED_WITH_RESTRICTIONS`
 
 审计时点：2026-08-26（Asia/Shanghai）

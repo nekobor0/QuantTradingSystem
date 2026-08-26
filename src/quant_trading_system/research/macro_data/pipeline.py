@@ -69,10 +69,10 @@ def validate_canonical(frame: pd.DataFrame, specs: tuple[SeriesSpec, ...]) -> di
         "series_id", "reference_period", "value", "source_id", "release_at", "available_at",
         "tradable_at", "retrieved_at", "vintage_id", "raw_sha256",
     ]].isna().any().any()
-    release = pd.to_datetime(frame["release_at"], utc=True, errors="coerce")
-    available = pd.to_datetime(frame["available_at"], utc=True, errors="coerce")
-    tradable = pd.to_datetime(frame["tradable_at"], utc=True, errors="coerce")
-    retrieved = pd.to_datetime(frame["retrieved_at"], utc=True, errors="coerce")
+    release = pd.to_datetime(frame["release_at"], utc=True, errors="coerce", format="mixed")
+    available = pd.to_datetime(frame["available_at"], utc=True, errors="coerce", format="mixed")
+    tradable = pd.to_datetime(frame["tradable_at"], utc=True, errors="coerce", format="mixed")
+    retrieved = pd.to_datetime(frame["retrieved_at"], utc=True, errors="coerce", format="mixed")
     checks["timestamps_parse"] = not (
         release.isna().any() or available.isna().any() or tradable.isna().any() or retrieved.isna().any()
     )

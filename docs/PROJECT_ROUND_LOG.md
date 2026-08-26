@@ -74,3 +74,13 @@
 - 代码：新增 `repair.py`、修复 CLI 和拒绝非精确异常集合的测试；对账通过后限制文本仅保留 historical capture timing。
 - 索引：`development/18-macro-data-layer/R011_macro_data_prioritization/06_F1_F2_F3_REMEDIATION_DECISION.md`；本地 `artifacts/data_expansion/repairs/r011_shibor_on_3m_swap/repair_manifest.json`。
 - 遗留：用户人工导出 2010-04 PMI 六字段；积累至少六个月 Shibor forward 首次成功采集日志后复审同日 11:05 PIT 规则。
+
+## R011 UPDATE · 2026-08-26 · PMI 缺口补齐与 W1 预确认门
+
+- PMI：用户人工复核的国家数据导出补齐 2010-04 六项，PMI curated 增至 13,536 条、205 vintages，2009-05—2026-07 数值缺月为 0，canonical 校验全通过；导出不证明历史 PIT，因此全历史 `research_ready=false`。
+- 原件策略：按用户决定，不额外保留 Excel/PDF；手工投递目录与本次 Raw 复制目录已删除，仅保留 normalized、输入哈希和人工确认接收标记。
+- W1：冻结 34 条机器注册表，五包计数 11/8/5/7/3；盘点 8 个既有宏观 Bronze，17 条具备字段级独立对照。来源、canonical ID、单位、制度断点和 W1_D1—D9 决策已进入确认门；未启动新增序列全量回填。
+- 模型分工：评估采用 5.6 Sol 冻结语义、adapter 与验收标准，5.6 Luna 执行高重复下载、解析和基础审计；Research Ready、PIT/口径异常和 Bronze 冲突必须升级 Sol/人工复核。
+- 验证：W1 registry 9 项机器检查通过；聚焦测试 10 项通过；最终全量与安全检查以本轮完成交接为准。
+- 索引：`07_W1_34_CONFIRMATION_GATE.md`、`08_W1_PRECONFIRMATION_AUDIT_AND_MODEL_ROUTING.md`、`09_PMI_201004_MANUAL_LANDING_AUDIT.md`、`config/macro_w1_confirmation_registry.json`。
+- 遗留：等待用户确认 W1_D1—W1_D9；确认前只允许来源探测、fixture、parser skeleton 和质量测试，不允许新增序列全量回填或策略接入。

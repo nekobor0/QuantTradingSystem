@@ -154,10 +154,16 @@ def discover_pmi_releases(*, interval_seconds: float = 1.0) -> list[dict[str, An
     return sorted({item["url"]: item for item in candidates}.values(), key=lambda item: (item["document_date"], item["url"]))
 
 
-def _combine_normalized(output_root: Path, source_id: str, destination: Path) -> pd.DataFrame:
-    paths = sorted((output_root / "normalized" / source_id).glob("*.parquet"))
+def _combine_normalized(output_root: Path, source_ids: str | tuple[str, ...], destination: Path) -> pd.DataFrame:
+    if isinstance(source_ids, str):
+        source_ids = (source_ids,)
+    paths = sorted(
+        path
+        for source_id in source_ids
+        for path in (output_root / "normalized" / source_id).glob("*.parquet")
+    )
     if not paths:
-        raise ValueError(f"no normalized shards for {source_id}")
+        raise ValueError(f"no normalized shards for {', '.join(source_ids)}")
     frame = pd.concat((pd.read_parquet(path) for path in paths), ignore_index=True)
     frame = frame.drop_duplicates(["series_id", "reference_period", "vintage_id"]).sort_values(
         ["reference_period", "series_id", "available_at", "vintage_id"]
@@ -256,14 +262,25 @@ def run_pmi_backfill(
         if index + 1 < len(catalog):
             time.sleep(interval)
     destination = output_root / "curated" / "pmi_observation_vintages.parquet"
-    frame = _combine_normalized(output_root, "nbs_pmi_release_archive", destination)
+    frame = _combine_normalized(
+        output_root, ("nbs_pmi_release_archive", "nbs_national_data_pmi"), destination
+    )
     validation = validate_canonical(frame, registry.series_for_source("nbs_pmi_release_archive"))
     parsed_periods = set(frame["reference_period"].astype(str))
     start = min(parsed_periods)
     end = max(parsed_periods)
     expected = set(pd.period_range(start, end, freq="M").astype(str))
+    missing = sorted(expected - parsed_periods)
+    non_pit = sorted(
+        set(
+            frame.loc[
+                frame["availability_evidence"] == "current_nbs_database_export_not_historical_pit",
+                "reference_period",
+            ].astype(str)
+        )
+    )
     report = {
-        "source_id": "nbs_pmi_release_archive",
+        "source_id": "nbs_pmi_release_archive+nbs_national_data_pmi",
         "catalog_pages": len(catalog),
         "completed_pages": len(completed),
         "failures": state["failures"],
@@ -271,10 +288,17 @@ def run_pmi_backfill(
         "vintages": int(frame["vintage_id"].nunique()),
         "reference_period_min": start,
         "reference_period_max": end,
-        "missing_reference_periods_within_parsed_range": sorted(expected - parsed_periods),
+        "missing_reference_periods_within_parsed_range": missing,
+        "historical_pit_gap_periods": non_pit,
+        "numerically_complete": not missing,
+        "historical_pit_complete": not non_pit,
         "validation": validation,
-        "research_ready": not state["failures"] and validation["passed"] and not (expected - parsed_periods),
-        "restriction": "known monthly coverage gap must be excluded explicitly" if expected - parsed_periods else None,
+        "research_ready": not state["failures"] and validation["passed"] and not missing and not non_pit,
+        "restriction": (
+            "numeric continuity is complete, but listed periods are current database exports without historical PIT evidence"
+            if non_pit
+            else ("known monthly coverage gap must be excluded explicitly" if missing else None)
+        ),
         "curated_path": str(destination.resolve()),
         "catalog_path": str(catalog_path.resolve()),
     }
