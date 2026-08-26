@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping
 from urllib.parse import urlencode
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pandas as pd
@@ -33,14 +34,26 @@ class HttpResult:
     final_url: str
 
 
-def fetch_public_url(url: str, *, method: str, timeout_seconds: int = 30, attempts: int = 3) -> HttpResult:
+def fetch_public_url(
+    url: str,
+    *,
+    method: str,
+    data: bytes | None = None,
+    headers: Mapping[str, str] | None = None,
+    timeout_seconds: int = 30,
+    attempts: int = 3,
+) -> HttpResult:
+    request_headers = {
+        "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
+        "User-Agent": "QuantTradingSystem-R011-internal-research/1.0",
+    }
+    if headers:
+        request_headers.update(headers)
     request = Request(
         url,
+        data=data,
         method=method.upper(),
-        headers={
-            "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
-            "User-Agent": "QuantTradingSystem-R011-internal-research/1.0",
-        },
+        headers=request_headers,
     )
     last_error: Exception | None = None
     for attempt in range(attempts):
@@ -52,6 +65,13 @@ def fetch_public_url(url: str, *, method: str, timeout_seconds: int = 30, attemp
                     headers=dict(response.headers.items()),
                     final_url=response.url,
                 )
+        except HTTPError as exc:
+            return HttpResult(
+                payload=exc.read(),
+                status=int(exc.code),
+                headers=dict(exc.headers.items()),
+                final_url=exc.geturl(),
+            )
         except Exception as exc:
             last_error = exc
             if attempt + 1 < attempts:

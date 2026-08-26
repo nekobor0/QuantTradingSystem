@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from html.parser import HTMLParser
 from typing import Any
@@ -12,10 +13,11 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from .contracts import RawSnapshot, SeriesSpec
+from .contracts import CANONICAL_COLUMNS, RawSnapshot, SeriesSpec
 
 
 PARSER_VERSION = "r011.2"
+RATES_PARSER_VERSION = "r011.w1.rates.v1"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 PMI_FIELDS = (
     ("CN.PMI.MFG.HEADLINE", "manufacturing_pmi", 0),
@@ -75,6 +77,7 @@ def _base_record(
     tradable_at: datetime,
     availability_evidence: str,
     snapshot: RawSnapshot,
+    parser_version: str = PARSER_VERSION,
 ) -> dict[str, Any]:
     retrieved = pd.Timestamp(snapshot.retrieved_at)
     vintage_id = f"{snapshot.source_id}:{snapshot.sha256[:16]}"
@@ -93,7 +96,7 @@ def _base_record(
         "retrieved_at": retrieved.isoformat(),
         "vintage_id": vintage_id,
         "raw_sha256": snapshot.sha256,
-        "parser_version": PARSER_VERSION,
+        "parser_version": parser_version,
     }
 
 
@@ -138,29 +141,255 @@ def parse_shibor(
     return pd.DataFrame(records).sort_values(["reference_period", "series_id"]).reset_index(drop=True)
 
 
+def next_strategy_trading_day(reference_date: str, holidays: frozenset[str] = frozenset()) -> datetime:
+    """Return the next strategy weekday bar at 09:30 Asia/Shanghai."""
+    candidate = datetime.strptime(reference_date, "%Y-%m-%d").date() + timedelta(days=1)
+    while candidate.weekday() >= 5 or candidate.isoformat() in holidays:
+        candidate += timedelta(days=1)
+    return datetime.combine(candidate, time(9, 30), SHANGHAI)
+
+
+def _empty_rates_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=CANONICAL_COLUMNS)
+
+
+def parse_cfets_repo_json(
+    payload: bytes,
+    snapshot: RawSnapshot,
+    *,
+    requested_date: str,
+    index_type: str,
+    series_id: str,
+) -> pd.DataFrame:
+    """Parse exactly one official CFETS R007 or DR007 weighted-average response."""
+    expected = {
+        "markVOList": ("CN.REPO.R007", "R007"),
+        "markInterBankVOList": ("CN.REPO.DR007", "DR007"),
+    }
+    if index_type not in expected or expected[index_type][0] != series_id:
+        raise ValueError(f"unsupported CFETS index_type/series_id: {index_type}/{series_id}")
+    try:
+        document = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("CFETS response is not valid JSON") from exc
+    if not isinstance(document, dict) or str(document.get("head", {}).get("rep_code")) != "200":
+        raise ValueError(f"CFETS response rejected: {document.get('head') if isinstance(document, dict) else None}")
+    data = document.get("data")
+    if not isinstance(data, dict) or data.get("lastDate") != requested_date:
+        raise ValueError(f"CFETS response date mismatch: expected {requested_date}, got {data}")
+    records = document.get("records")
+    if not isinstance(records, list) or not records:
+        raise ValueError("CFETS response contains no records")
+    instrument_code = expected[index_type][1]
+    matches = [item for item in records if isinstance(item, dict) and item.get("instrmntCd") == instrument_code]
+    if len(matches) != 1:
+        raise ValueError(f"CFETS response must contain exactly one {instrument_code} record")
+    record = matches[0]
+    value_text = record.get("wghtdAvgRepoRate")
+    if value_text in (None, ""):
+        raise ValueError(f"CFETS {instrument_code} record has no wghtdAvgRepoRate")
+    try:
+        value = float(value_text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"CFETS {instrument_code} weighted-average rate is not numeric") from exc
+    if not pd.notna(value):
+        raise ValueError(f"CFETS {instrument_code} weighted-average rate is NaN")
+    release_at = datetime.combine(
+        datetime.strptime(requested_date, "%Y-%m-%d").date(), time(23, 59, 59), SHANGHAI
+    )
+    next_bar = next_strategy_trading_day(requested_date)
+    return pd.DataFrame([
+        _base_record(
+            series_id=series_id,
+            reference_period=requested_date,
+            value=value,
+            unit="percent_per_annum",
+            seasonal_adjustment="not_applicable",
+            source_id=snapshot.source_id,
+            source_record_id=f"{requested_date}|{instrument_code}|wghtdAvgRepoRate",
+            release_at=release_at,
+            available_at=next_bar,
+            tradable_at=next_bar,
+            availability_evidence="W1_D5_conservative_next_trading_day_rule",
+            snapshot=snapshot,
+            parser_version=RATES_PARSER_VERSION,
+        )
+    ], columns=CANONICAL_COLUMNS)
+
+
+@dataclass(frozen=True, slots=True)
+class PbocPolicyParseResult:
+    observations: pd.DataFrame
+    omissions: tuple[dict[str, Any], ...]
+    page_timestamp: datetime
+    event_kind: str
+
+
+def _date_from_text(text: str, *, marker: str | None = None, fallback: datetime) -> str:
+    if marker and marker in text:
+        marker_position = text.find(marker)
+        search_text = text[max(0, marker_position - 80):marker_position]
+    else:
+        search_text = text
+    match = re.search(r"(?<!\d)(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日", search_text)
+    if match is None:
+        return fallback.date().isoformat()
+    year, month, day = (int(value) for value in match.groups())
+    return f"{year:04d}-{month:02d}-{day:02d}"
+
+
+def _policy_rate_from_tables(text: str) -> float | None:
+    parser = _TableParser()
+    parser.feed(text)
+    for table in parser.tables:
+        for row in table:
+            if not row or not any("7天" in re.sub(r"\s+", "", cell) for cell in row):
+                continue
+            for cell in row:
+                match = re.search(r"(?<![\d.])(\d+(?:\s*\.\s*\d+)?)\s*%", cell)
+                if match:
+                    return float(re.sub(r"\s+", "", match.group(1)))
+    visible = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    normalized = re.sub(r"\s+", "", visible)
+    match = re.search(r"7天.{0,120}?操作利率.{0,80}?(\d+(?:\.\d+)?)\s*%", normalized)
+    if match:
+        return float(match.group(1))
+    match = re.search(r"操作利率.{0,80}?7天.{0,80}?(\d+(?:\.\d+)?)\s*%", normalized)
+    return float(match.group(1)) if match else None
+
+
+def _mlf_explicit_rate(text: str) -> float | None:
+    visible = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    normalized = " ".join(visible.split())
+    match = re.search(r"(?:统一中标利率|中标利率|操作利率|利率)\D{0,40}(\d+(?:\.\d+)?)\s*%", normalized)
+    return float(match.group(1)) if match else None
+
+
+def parse_pboc_policy_release(
+    payload: bytes,
+    snapshot: RawSnapshot,
+    *,
+    source_file: str | None = None,
+) -> PbocPolicyParseResult:
+    """Parse a PBOC OMO/MLF release, retaining post-reform MLF omission evidence."""
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("PBOC release is not UTF-8 HTML") from exc
+    visible = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    normalized = " ".join(visible.split())
+    page_timestamp = _publication_timestamp(text)
+    is_mlf = snapshot.source_id == "pboc_mlf_release" or "中期借贷便利" in normalized
+    is_omo = snapshot.source_id == "pboc_omo_release" or "逆回购" in normalized
+    if is_mlf == is_omo:
+        raise ValueError("PBOC release cannot be classified uniquely as OMO or MLF")
+    if is_omo:
+        compact = re.sub(r"\s+", "", normalized)
+        zero_operation = bool(re.search(r"7天期?逆回购操作量为零", compact) or re.search(r"7天0亿元0亿元", compact))
+        if "7天" not in compact or ("操作利率" not in compact and not zero_operation):
+            raise ValueError("PBOC OMO release lacks 7-day operation-rate context")
+        value = _policy_rate_from_tables(text)
+        if value is None:
+            if re.search(r"7\s*天期?逆回购操作量为零", normalized) or re.search(r"7\s*天\s*0\s*亿元\s*0\s*亿元", normalized):
+                omission = {
+                    "series_id": "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
+                    "reference_period": _date_from_text(normalized, fallback=page_timestamp),
+                    "state": "RATE_NOT_PUBLISHED_ZERO_OPERATION",
+                    "reason": "official notice reports zero 7-day reverse-repo operation and publishes no rate",
+                    "source_file": source_file or snapshot.raw_path,
+                    "raw_sha256": snapshot.sha256,
+                }
+                return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "OMO_7D_ZERO_OPERATION")
+            raise ValueError("PBOC OMO release lacks an explicit 7-day percentage rate")
+        reference_period = _date_from_text(normalized, fallback=page_timestamp)
+        tradable_at = max(page_timestamp, datetime.combine(page_timestamp.date(), time(9, 30), SHANGHAI))
+        frame = pd.DataFrame([
+            _base_record(
+                series_id="CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
+                reference_period=reference_period,
+                value=value,
+                unit="percent_per_annum",
+                seasonal_adjustment="not_applicable",
+                source_id=snapshot.source_id,
+                source_record_id=f"{reference_period}|reverse_repo|7D",
+                release_at=page_timestamp,
+                available_at=page_timestamp,
+                tradable_at=tradable_at,
+                availability_evidence="observed_official_release_page_timestamp",
+                snapshot=snapshot,
+                parser_version=RATES_PARSER_VERSION,
+            )
+        ], columns=CANONICAL_COLUMNS)
+        return PbocPolicyParseResult(frame, (), page_timestamp, "OMO_7D")
+
+    if "1年期" not in normalized:
+        raise ValueError("PBOC MLF release lacks 1-year context")
+    reference_period = _date_from_text(normalized, marker="中国人民银行将", fallback=page_timestamp)
+    explicit_rate = _mlf_explicit_rate(text)
+    if reference_period >= "2025-03-01":
+        if explicit_rate is not None:
+            raise ValueError("post-reform MLF unified rate must never be emitted")
+        omission = {
+            "series_id": "CN.PBOC.MLF.1Y.RATE",
+            "reference_period": reference_period,
+            "state": "UNIFIED_RATE_STRUCTURALLY_UNDEFINED",
+            "reason": "official notice states multiple-price winning and does not publish a unified MLF rate",
+            "source_file": source_file or snapshot.raw_path,
+            "raw_sha256": snapshot.sha256,
+        }
+        return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "MLF_POST_REFORM")
+    if explicit_rate is None:
+        raise ValueError("pre-reform MLF release lacks an explicit unified 1-year rate")
+    tradable_at = max(page_timestamp, datetime.combine(page_timestamp.date(), time(9, 30), SHANGHAI))
+    frame = pd.DataFrame([
+        _base_record(
+            series_id="CN.PBOC.MLF.1Y.RATE",
+            reference_period=reference_period,
+            value=explicit_rate,
+            unit="percent_per_annum",
+            seasonal_adjustment="not_applicable",
+            source_id=snapshot.source_id,
+            source_record_id=f"{reference_period}|MLF|1Y|unified_rate",
+            release_at=page_timestamp,
+            available_at=page_timestamp,
+            tradable_at=tradable_at,
+            availability_evidence="observed_official_release_page_timestamp",
+            snapshot=snapshot,
+            parser_version=RATES_PARSER_VERSION,
+        )
+    ], columns=CANONICAL_COLUMNS)
+    return PbocPolicyParseResult(frame, (), page_timestamp, "MLF_PRE_REFORM")
+
+
+parse_cfets_repo_rate = parse_cfets_repo_json
+parse_pboc_release_html = parse_pboc_policy_release
+
+
 def _publication_timestamp(text: str) -> datetime:
     metadata = re.search(
-        r"""name=["']PubDate["'][^>]+content=["'](\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2})["']""",
+        r"""name=["']PubDate["'][^>]+content=["'](\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2}(?::\d{2})?)["']""",
         text,
         re.IGNORECASE,
     )
     if metadata:
         year, month, day, clock = metadata.groups()
-        return datetime.strptime(f"{year}-{month}-{day} {clock}", "%Y-%m-%d %H:%M").replace(tzinfo=SHANGHAI)
+        clock_format = "%H:%M:%S" if clock.count(":") == 2 else "%H:%M"
+        return datetime.strptime(f"{year}-{month}-{day} {clock}", f"%Y-%m-%d {clock_format}").replace(tzinfo=SHANGHAI)
     visible = html.unescape(re.sub(r"<[^>]+>", " ", text))
     normalized = " ".join(visible.split())
     prefixed = re.search(
-        r"发布时间[：:]?\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2})",
+        r"发布时间[：:]?\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2}(?::\d{2})?)",
         normalized,
     )
     match = prefixed or re.search(
-        r"(?<![\d/-])(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2})(?!\d)",
+        r"(?<![\d/-])(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2}(?::\d{2})?)(?!\d)",
         normalized,
     )
     if not match:
         raise ValueError("PMI release page is missing an observed publication timestamp")
     year, month, day, clock = match.groups()
-    return datetime.strptime(f"{year}-{month}-{day} {clock}", "%Y-%m-%d %H:%M").replace(tzinfo=SHANGHAI)
+    clock_format = "%H:%M:%S" if clock.count(":") == 2 else "%H:%M"
+    return datetime.strptime(f"{year}-{month}-{day} {clock}", f"%Y-%m-%d {clock_format}").replace(tzinfo=SHANGHAI)
 
 
 def _period(cell: str) -> str | None:
