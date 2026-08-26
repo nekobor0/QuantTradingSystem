@@ -65,3 +65,12 @@
 - 验证：工作树安全扫描 0 风险；R011 聚焦测试、compileall、项目 mypy（按既有策略排除 research）和交易安全专项已在实现检查点通过；最终全量测试结果见完成交接。
 - 索引：`development/18-macro-data-layer/R011_macro_data_prioritization/05_P0_SHIBOR_PMI_BACKFILL_AUDIT.md`；`config/macro_sample_registry.json`；`scripts/data_lake/run_macro_samples.py`；`src/quant_trading_system/research/macro_data/`。
 - 遗留：2010-04 PMI 官方缺口；国家数据端点 403；Shibor forward latency evidence；Tushare Shibor Bronze 列互换根因与派生修复层。
+
+## R011 UPDATE · 2026-08-26 · F1—F3 修复与时点决策
+
+- F1：全重叠区跨列检测确认仅 21 日、42 单元格发生 O/N 与 3M 精确互换；以 CFETS 官方值修复 Bronze 总表和 2022 分片，原件与前后 SHA-256 保存在本地 repair manifest。修复后 Shibor 21,040/21,040、PMI 762/762 精确一致。
+- F2：CFLP 官方存档确认 `2010-04 HEADLINE=55.7`、发布页时间 2010-05-01 09:06；五个构成指数仍需从国家数据 `A0B01` 人工原生导出，禁止插值或从 headline 反推。
+- F3：最近六个月数值完整但历史接口无逐日实际发布时间。用户批准历史规则：策略交易日 D 只使用 `reference_period < D` 的最新 Shibor；D1 同日规则仅用于 forward observation。
+- 代码：新增 `repair.py`、修复 CLI 和拒绝非精确异常集合的测试；对账通过后限制文本仅保留 historical capture timing。
+- 索引：`development/18-macro-data-layer/R011_macro_data_prioritization/06_F1_F2_F3_REMEDIATION_DECISION.md`；本地 `artifacts/data_expansion/repairs/r011_shibor_on_3m_swap/repair_manifest.json`。
+- 遗留：用户人工导出 2010-04 PMI 六字段；积累至少六个月 Shibor forward 首次成功采集日志后复审同日 11:05 PIT 规则。

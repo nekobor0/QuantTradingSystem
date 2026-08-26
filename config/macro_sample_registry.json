@@ -3,6 +3,7 @@
   "timezone": "Asia/Shanghai",
   "decisions": {
     "D1_shibor_tradable_at": "max(actual_capture_completed_at, scheduled_release_at_plus_5_minutes)",
+    "D1_historical_shibor_visibility": "latest_observation_with_reference_period_strictly_before_strategy_trading_date",
     "D2_pmi_source_roles": "nbs_release_pages_primary_pit_national_database_reconciliation_only",
     "D3_pmi_initial_fields": "all_six_manufacturing_fields",
     "D4_shibor_usage": "internal_research_low_frequency_no_redistribution",

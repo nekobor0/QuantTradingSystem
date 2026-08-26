@@ -356,7 +356,11 @@ def reconcile_tushare(
             "pmi_reconciled_window_start": pmi_report["reference_period_min"],
             "pmi_reconciled_window_end": pmi_report["reference_period_max"],
             "shibor_ready": False,
-            "shibor_restriction": "historical capture timing and quarantined Tushare O/N-3M swap",
+            "shibor_restriction": (
+                "historical capture timing"
+                if shibor_report["passed"]
+                else "historical capture timing and quarantined Tushare O/N-3M swap"
+            ),
         },
     }
     _write_json(output_root / "audits" / "tushare_reconciliation.json", report)
