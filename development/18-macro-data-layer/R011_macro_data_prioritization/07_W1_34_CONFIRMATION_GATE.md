@@ -1,6 +1,6 @@
 # R011 W1 34 条宏观脊柱确认门
 
-状态：`PRE_CONFIRMATION_COMPLETE / FULL_BACKFILL_BLOCKED`
+状态：`W1_D1—W1_D9 CONFIRMED / RATES GOLD READY / SHADOW ONLY`
 
 审计时点：2026-08-26（Asia/Shanghai）
 
@@ -45,7 +45,9 @@ python scripts/data_lake/validate_macro_w1_gate.py
 
 国家统计局 2026-07 发布页已直接验证制造业 PMI 49.2、新订单 48.5、非制造业商务活动 49.0、综合 PMI 49.3；核心 CPI 0.9、PPI 同比 3.5、环比 -0.7 也可从对应官方发布/解读页提取。现有样例因此足以确认字段方向，但不能替代全历史逐期对账。
 
-## 4. 请确认 W1_D1—W1_D9
+## 4. 已确认 W1_D1—W1_D9
+
+用户于 2026-08-26 确认全部接受；以下口径现为冻结决策，不再是待确认建议。
 
 ### W1_D1 — 金额单位
 
@@ -85,15 +87,17 @@ python scripts/data_lake/validate_macro_w1_gate.py
 
 ## 5. 硬门禁
 
-在 W1_D1—W1_D9 未确认前：
+确认门已解除，但在各数据包通过契约、两期 gold、shadow 回填和 Sol 复核前：
 
 - 不启动 29 条尚未正式实现序列的全量回填；
 - 不把现有非 PIT Bronze 提升为官方主源；
 - 不做累计转单月、事件前填、LPR 跨制度拼接；
 - 不生成可进入策略的 Regime / Conditional Alpha / Exposure Control 特征；
-- 可继续做无状态变化的来源探测、fixture、parser skeleton 和质量测试。
+- 只允许契约范围内的 shadow 获取、fixture、parser 和质量测试。
 
 ## 6. 确认后的验收顺序
 
 每个数据包依次通过：source terms → 两期真实样例 → Raw/或获批人工接收策略 → parser 重放 → canonical 校验 → 现有 Bronze 对账 → PIT 窗口分级 → 全量回填。任一步失败即停在 quarantine，不以“下载行数”代替验收。
+
+第一包契约、两期 gold 与 Luna handoff 见 `09_W1_RATES_CONTRACT_GOLD_AND_LUNA_HANDOFF.md`。
 

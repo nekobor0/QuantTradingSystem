@@ -6,7 +6,7 @@ from scripts.data_lake.validate_macro_w1_gate import validate
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_w1_confirmation_registry_is_closed_and_exactly_34_series():
+def test_w1_confirmation_registry_records_all_decisions_and_exactly_34_series():
     result = validate(
         ROOT / "config" / "macro_w1_confirmation_registry.json",
         ROOT / "development" / "18-macro-data-layer" / "R011_macro_data_prioritization" / "02_china_macro_data_universe_v0.1.yaml",

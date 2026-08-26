@@ -18,6 +18,7 @@ def validate(registry_path: Path, universe_path: Path) -> dict[str, object]:
     package_counts = {package["package_id"]: package["series_count"] for package in registry["packages"]}
     actual_counts = {package_id: sum(row["package"] == package_id for row in rows) for package_id in package_counts}
     universe_by_id = {row["id"]: row for row in universe["series"]}
+    decision_ids = [row["id"] for row in registry["confirmation_decisions"]]
     checks = {
         "declared_count_is_34": registry["series_count"] == 34,
         "exactly_34_series": len(rows) == 34,
@@ -27,7 +28,14 @@ def validate(registry_path: Path, universe_path: Path) -> dict[str, object]:
         "package_counts_match": actual_counts == package_counts,
         "known_sources_only": set(row["source"] for row in rows).issubset(registry["sources"]),
         "existing_assets_are_crosschecks": registry["policies"]["existing_tushare_role"] == "independent_crosscheck_only",
-        "confirmation_gate_is_closed": registry["status"] == "PRE_CONFIRMATION" and registry["policies"]["no_full_backfill_before_human_confirmation"],
+        "all_decisions_confirmed": (
+            registry["status"] == "DECISIONS_CONFIRMED"
+            and registry["policies"]["human_confirmation_complete"]
+            and not registry["policies"]["no_full_backfill_before_human_confirmation"]
+            and registry["confirmed_decision_ids"] == [f"W1_D{number}" for number in range(1, 10)]
+            and decision_ids == registry["confirmed_decision_ids"]
+        ),
+        "rates_remain_shadow_only": registry["policies"]["rates_shadow_only_before_sol_review"],
     }
     failures = sorted(name for name, passed in checks.items() if not passed)
     return {"passed": not failures, "checks": checks, "failures": failures, "package_counts": actual_counts}

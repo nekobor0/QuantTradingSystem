@@ -84,3 +84,11 @@
 - 验证：W1 registry 9 项机器检查通过；聚焦测试 10 项通过；最终全量与安全检查以本轮完成交接为准。
 - 索引：`07_W1_34_CONFIRMATION_GATE.md`、`08_W1_PRECONFIRMATION_AUDIT_AND_MODEL_ROUTING.md`、`09_PMI_201004_MANUAL_LANDING_AUDIT.md`、`config/macro_w1_confirmation_registry.json`。
 - 遗留：等待用户确认 W1_D1—W1_D9；确认前只允许来源探测、fixture、parser skeleton 和质量测试，不允许新增序列全量回填或策略接入。
+
+## R011 UPDATE · 2026-08-26 · W1 决策确认与利率 Gold 契约
+
+- 决策：用户确认 W1_D1—W1_D9 全部接受；机器注册表转为 `DECISIONS_CONFIRMED`，但利率第一包仍只允许一个月 shadow，正式全历史与策略接入继续关闭。
+- 契约：冻结 DR007/R007 的中国货币网 `wghtdAvgRepoRate`、历史下一策略交易日可见规则、OMO 稀疏事件和 MLF 制度断点。
+- Gold：本地 ignored `artifacts/macro_r011/gold_fixtures/w1_rates/2026-08-{24,25}` 两期均通过哈希、字段、时间顺序和值域校验；真实市场数据未纳入 Git。
+- MLF：官方已确认 2025-03 起多重价位中标、不再有统一利率；改革后 `CN.PBOC.MLF.1Y.RATE` 必须零输出并写结构性缺失审计。
+- 索引：`config/macro_w1_rates_contract.json`、`scripts/data_lake/validate_macro_w1_rates_contract.py`、`09_W1_RATES_CONTRACT_GOLD_AND_LUNA_HANDOFF.md`。

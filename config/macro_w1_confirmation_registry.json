@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "PRE_CONFIRMATION",
+  "status": "DECISIONS_CONFIRMED",
   "as_of": "2026-08-26",
   "parent_universe": "development/18-macro-data-layer/R011_macro_data_prioritization/02_china_macro_data_universe_v0.1.yaml",
   "series_count": 34,
@@ -10,7 +10,9 @@
     "historical_without_release_evidence": "exploratory_only",
     "no_cumulative_to_monthly_conversion_without_whitelist": true,
     "no_event_series_forward_fill_in_canonical_layer": true,
-    "no_full_backfill_before_human_confirmation": true
+    "human_confirmation_complete": true,
+    "no_full_backfill_before_human_confirmation": false,
+    "rates_shadow_only_before_sol_review": true
   },
   "packages": [
     {"package_id":"rates_liquidity","order":1,"series_count":11,"primary_sources":["CFETS_CHINAMONEY","PBOC_POLICY","CHINABOND"],"sample_state":"SHIBOR_IMPLEMENTED_OTHER_SOURCE_SHAPES_PROBED"},
@@ -63,6 +65,7 @@
     {"id":"gdp_real_yoy","canonical_id":"CN.GDP.REAL.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"percent_yoy","existing":"cn_gdp.parquet:gdp_yoy","state":"FIELD_MAPPED"},
     {"id":"industrial_va_yoy","canonical_id":"CN.INDUSTRIAL.VA.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"monthly_with_jan_feb_joint","unit":"percent_yoy","existing":null,"state":"NEEDS_ADAPTER_PERIOD_SPAN_GATE"}
   ],
+  "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
   "confirmation_decisions": [
     {"id":"W1_D1","topic":"amount_units","recommended":"store official 100m_cny for GDP, money and flow series; derive trillion_cny only in feature layer"},
     {"id":"W1_D2","topic":"gdp_nominal_grain","recommended":"canonical official YTD cumulative value plus separately derived single-quarter value; never label YTD as quarter-only"},

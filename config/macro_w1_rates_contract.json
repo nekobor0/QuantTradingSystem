@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "contract_id": "R011.W1.RATES_LIQUIDITY.SHADOW_V1",
+  "status": "GOLD_READY_SHADOW_ONLY",
+  "as_of": "2026-08-26",
+  "confirmation": {
+    "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
+    "confirmed_by": "user",
+    "confirmed_on": "2026-08-26"
+  },
+  "scope": {
+    "series_ids": [
+      "CN.REPO.DR007",
+      "CN.REPO.R007",
+      "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
+      "CN.PBOC.MLF.1Y.RATE"
+    ],
+    "allowed_run": "one_calendar_month_shadow_backfill",
+    "forbidden_until_sol_review": ["full_history_backfill", "strategy_integration", "research_ready_promotion"]
+  },
+  "canonical": {
+    "columns": [
+      "series_id", "reference_period", "value", "unit", "seasonal_adjustment",
+      "source_id", "source_record_id", "release_at", "available_at", "tradable_at",
+      "availability_evidence", "retrieved_at", "vintage_id", "raw_sha256", "parser_version"
+    ],
+    "primary_key": ["series_id", "reference_period", "vintage_id"],
+    "timezone": "Asia/Shanghai",
+    "no_forward_fill": true,
+    "no_synthetic_event_rows": true,
+    "immutable_raw_required": true
+  },
+  "sources": {
+    "cfets_repo_daily": {
+      "authority": "official_market_infrastructure",
+      "landing_page": "https://www.chinamoney.com.cn/chinese/mtdexdaily/?tab=2",
+      "method": "POST",
+      "url": "https://www.chinamoney.com.cn/ags/ms/cm-u-dlrp/PrDlyBltn",
+      "common_form": {"lang": "cn", "publishedTime": "2200"},
+      "r007_index_type": "markVOList",
+      "dr007_index_type": "markInterBankVOList",
+      "date_form_field": "searchDate",
+      "response_date_field": "data.lastDate",
+      "value_field": "wghtdAvgRepoRate",
+      "instrument_field": "instrmntCd",
+      "request_interval_seconds": 2,
+      "history_probe_result": "public_endpoint_exposes_rolling_window_only"
+    },
+    "pboc_omo_release": {
+      "authority": "official",
+      "index_url": "https://www.pbc.gov.cn/zhengcehuobisi/125207/125213/125431/125475/index.html",
+      "method": "GET",
+      "page_timestamp_selectors": ["meta[name=PubDate]", "#shijian"],
+      "required_context": ["逆回购操作情况", "7天", "操作利率"]
+    },
+    "pboc_mlf_release": {
+      "authority": "official",
+      "index_url": "https://www.pbc.gov.cn/zhengcehuobisi/125207/125213/125437/125446/index.html",
+      "method": "GET",
+      "page_timestamp_selectors": ["meta[name=PubDate]", "#shijian"],
+      "required_context": ["中期借贷便利", "1年期"]
+    }
+  },
+  "series": {
+    "CN.REPO.DR007": {
+      "source_id": "cfets_repo_daily",
+      "instrument_code": "DR007",
+      "definition": "存款类机构质押式回购7天加权利率",
+      "unit": "percent_per_annum",
+      "frequency": "business_daily",
+      "value_bounds": [0.0, 20.0],
+      "historical_release_at": "reference_day_23:59:59+08:00_conservative_proxy",
+      "historical_available_at": "next_strategy_trading_day_09:30+08:00",
+      "historical_tradable_at": "next_strategy_trading_day_09:30+08:00",
+      "availability_evidence": "W1_D5_conservative_next_trading_day_rule",
+      "forward_collection_rule": "tradable_at=max(observed_retrieval_completion,next_strategy_bar)"
+    },
+    "CN.REPO.R007": {
+      "source_id": "cfets_repo_daily",
+      "instrument_code": "R007",
+      "definition": "全市场质押式回购7天加权利率",
+      "unit": "percent_per_annum",
+      "frequency": "business_daily",
+      "value_bounds": [0.0, 20.0],
+      "historical_release_at": "reference_day_23:59:59+08:00_conservative_proxy",
+      "historical_available_at": "next_strategy_trading_day_09:30+08:00",
+      "historical_tradable_at": "next_strategy_trading_day_09:30+08:00",
+      "availability_evidence": "W1_D5_conservative_next_trading_day_rule",
+      "forward_collection_rule": "tradable_at=max(observed_retrieval_completion,next_strategy_bar)"
+    },
+    "CN.PBOC.OMO.REVERSE_REPO.7D.RATE": {
+      "source_id": "pboc_omo_release",
+      "definition": "7天期逆回购操作利率",
+      "unit": "percent_per_annum",
+      "frequency": "event",
+      "value_bounds": [0.0, 20.0],
+      "release_at": "observed_page_timestamp",
+      "available_at": "observed_page_timestamp",
+      "tradable_at": "max(observed_page_timestamp,next_strategy_bar)",
+      "availability_evidence": "observed_official_release_page_timestamp",
+      "canonical_fill": "sparse_only"
+    },
+    "CN.PBOC.MLF.1Y.RATE": {
+      "source_id": "pboc_mlf_release",
+      "definition": "1年期MLF统一中标利率（仅适用于单一价位制度）",
+      "unit": "percent_per_annum",
+      "frequency": "event",
+      "value_bounds": [0.0, 20.0],
+      "release_at": "observed_page_timestamp",
+      "available_at": "observed_page_timestamp",
+      "tradable_at": "max(observed_page_timestamp,next_strategy_bar)",
+      "availability_evidence": "observed_official_release_page_timestamp",
+      "canonical_fill": "sparse_only",
+      "regimes": [
+        {
+          "end": "2025-02-28",
+          "state": "UNIFIED_RATE_DEFINED",
+          "parser_action": "emit_only_when_official_page_explicitly_states_1y_mlf_rate"
+        },
+        {
+          "start": "2025-03-01",
+          "state": "UNIFIED_RATE_STRUCTURALLY_UNDEFINED",
+          "official_basis": "MLF changed to fixed-quantity rate tender with multiple-price winning; no unified winning rate",
+          "parser_action": "emit_no_rate_row_and_write_structural_omission_audit"
+        }
+      ]
+    }
+  },
+  "gold_fixtures": {
+    "root": "artifacts/macro_r011/gold_fixtures/w1_rates",
+    "commit_policy": "ignored_local_market_data_never_commit",
+    "periods": ["2026-08-24", "2026-08-25"],
+    "required_files_per_period": ["cfets_r007.json", "cfets_dr007.json", "pboc_omo.html", "expected.json", "checksums.json"],
+    "additional_files": {"2026-08-25": ["pboc_mlf_notice.html"]}
+  },
+  "acceptance": {
+    "hard_fail": {
+      "source_date_equals_requested_date": true,
+      "exact_instrument_match": true,
+      "unique_primary_key": true,
+      "canonical_columns_exact": true,
+      "raw_sha256_matches": true,
+      "timestamp_order": "release_at<=available_at<=tradable_at<=retrieved_at_for_historical_backfill",
+      "no_post_2025_02_mlf_rate_rows": true,
+      "no_forward_fill": true,
+      "all_values_within_registered_bounds": true
+    },
+    "shadow_month": {
+      "repo_pair_same_date_coverage_min": 0.95,
+      "repo_duplicate_rows_max": 0,
+      "official_omo_event_parse_rate": 1.0,
+      "mlf_post_reform_rate_rows_expected": 0,
+      "unexplained_missing_rows_max": 0,
+      "quarantine_on_contract_violation": true
+    },
+    "warnings": {
+      "abs_r007_minus_dr007_percent_points": 2.0,
+      "daily_change_percent_points": 2.0,
+      "crosscheck_role": "independent_crosscheck_only_not_overwrite"
+    }
+  }
+}

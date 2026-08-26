@@ -1,6 +1,6 @@
 # R011 W1 预确认审计与 Sol/Luna 执行分工
 
-状态：`READY_FOR_HUMAN_DECISIONS`
+状态：`DECISIONS_CONFIRMED / FIRST SOL→LUNA CONTRACT READY`
 
 ## 技术摘要
 
@@ -17,7 +17,7 @@ W1 34 条注册表已通过 9 项结构检查，五包计数为 11/8/5/7/3；现
 | 全部存在于 Constitution backlog | 通过 |
 | 包计数 | 11 / 8 / 5 / 7 / 3，准确 |
 | 来源引用 | 全部注册 |
-| 全量回填门禁 | 关闭，等待 W1_D1—D9 |
+| 全量回填门禁 | W1_D1—D9 已确认；第一包仅开放一个月 shadow，待 Sol 复核 |
 | 现有对照资产 | 8 个宏观 Bronze 文件；17 条可直接字段对照 |
 | PIT 现状 | Shibor/PMI 部分已实现；其他现有 Bronze 不足以证明 PIT |
 
@@ -73,5 +73,5 @@ Luna 连续两次在同一 shard 失败时停止重试；任何 schema 漂移、
 
 ## 7. 下一步
 
-用户确认 W1_D1—D9 后，先用“DR007/R007 + OMO/MLF”作为第一轮 Sol→Luna handoff：Sol 写契约和两期 gold fixture，Luna 回填一个月并运行审计，Sol 只复核异常和四类抽样。通过后再复制到 PMI 扩展、价格、信用和增长包。
+W1_D1—D9 已全部确认。“DR007/R007 + OMO/MLF”的冻结契约、2026-08-24/25 两期 gold 和 Luna 任务书已完成，下一步由 Luna 做一个月 shadow 回填与初审，Sol 复核异常和四类抽样。通过后再复制到 PMI 扩展、价格、信用和增长包。MLF 自 2025-03 起已无统一中标利率，改革后只允许结构性缺失审计，不允许生成 rate 行。
 
