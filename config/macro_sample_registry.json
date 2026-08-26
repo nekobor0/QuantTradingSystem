@@ -1,13 +1,21 @@
 {
-  "version": 1,
+  "version": 2,
   "timezone": "Asia/Shanghai",
+  "decisions": {
+    "D1_shibor_tradable_at": "max(actual_capture_completed_at, scheduled_release_at_plus_5_minutes)",
+    "D2_pmi_source_roles": "nbs_release_pages_primary_pit_national_database_reconciliation_only",
+    "D3_pmi_initial_fields": "all_six_manufacturing_fields",
+    "D4_shibor_usage": "internal_research_low_frequency_no_redistribution",
+    "D5_tushare_role": "independent_reconciliation_never_overwrite"
+  },
   "readiness_policy": {
     "required_before_research_ready": [
       "raw_snapshot_immutable",
       "source_manifest_complete",
       "canonical_schema_valid",
       "point_in_time_evidence_valid",
-      "human_semantics_confirmed"
+      "human_semantics_confirmed",
+      "independent_reconciliation_pass_or_quarantine"
     ]
   },
   "sources": [
@@ -20,7 +28,7 @@
       "url": "https://www.shibor.sh.cn/ags/ms/cm-u-bk-shibor/ShiborHis",
       "public_landing_page": "https://www.shibor.sh.cn/shibor/dataservices/",
       "publication_rule": "11:00 Asia/Shanghai on each business day",
-      "automation_status": "sample_only_pending_usage_confirmation",
+      "automation_status": "approved_internal_research_low_frequency",
       "request_interval_seconds": 2
     },
     {
@@ -29,10 +37,10 @@
       "authority": "official",
       "acquisition_mode": "public_release_page",
       "method": "GET",
-      "url": "https://www.stats.gov.cn/zwfwck/sjfb/202607/t20260731_1964253.html",
-      "public_landing_page": "https://www.stats.gov.cn/sj/fbrc/bnxxfb/",
+      "url": "https://www.stats.gov.cn/sj/zxfb/202607/t20260731_1964253.html",
+      "public_landing_page": "https://www.stats.gov.cn/sj/zxfb/",
       "publication_rule": "observed timestamp printed on each release page",
-      "automation_status": "sample_only_pending_semantics_confirmation",
+      "automation_status": "approved_resumable_archive_backfill",
       "request_interval_seconds": 2
     },
     {

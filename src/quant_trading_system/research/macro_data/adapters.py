@@ -1,11 +1,11 @@
-"""Deterministic parsers for the R011 Shibor and PMI samples."""
+"""Deterministic parsers for official Shibor and PMI releases."""
 
 from __future__ import annotations
 
 import html
 import json
 import re
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from html.parser import HTMLParser
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -15,15 +15,15 @@ import pandas as pd
 from .contracts import RawSnapshot, SeriesSpec
 
 
-PARSER_VERSION = "r011.1"
+PARSER_VERSION = "r011.2"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 PMI_FIELDS = (
-    ("CN.PMI.MFG.HEADLINE", "manufacturing_pmi", 1),
-    ("CN.PMI.MFG.PRODUCTION", "production", 2),
-    ("CN.PMI.MFG.NEW_ORDERS", "new_orders", 3),
-    ("CN.PMI.MFG.RAW_MATERIAL_INVENTORY", "raw_material_inventory", 4),
-    ("CN.PMI.MFG.EMPLOYMENT", "employment", 5),
-    ("CN.PMI.MFG.SUPPLIER_DELIVERY_TIME", "supplier_delivery_time", 6),
+    ("CN.PMI.MFG.HEADLINE", "manufacturing_pmi", 0),
+    ("CN.PMI.MFG.PRODUCTION", "production", 1),
+    ("CN.PMI.MFG.NEW_ORDERS", "new_orders", 2),
+    ("CN.PMI.MFG.RAW_MATERIAL_INVENTORY", "raw_material_inventory", 3),
+    ("CN.PMI.MFG.EMPLOYMENT", "employment", 4),
+    ("CN.PMI.MFG.SUPPLIER_DELIVERY_TIME", "supplier_delivery_time", 5),
 )
 
 
@@ -72,6 +72,7 @@ def _base_record(
     source_record_id: str,
     release_at: datetime,
     available_at: datetime,
+    tradable_at: datetime,
     availability_evidence: str,
     snapshot: RawSnapshot,
 ) -> dict[str, Any]:
@@ -87,6 +88,7 @@ def _base_record(
         "source_record_id": source_record_id,
         "release_at": release_at.isoformat(),
         "available_at": available_at.isoformat(),
+        "tradable_at": tradable_at.isoformat(),
         "availability_evidence": availability_evidence,
         "retrieved_at": retrieved.isoformat(),
         "vintage_id": vintage_id,
@@ -107,10 +109,12 @@ def parse_shibor(
     expected = {"ON", "1W", "2W", "1M", "3M", "6M", "9M", "1Y"}
     if set(by_field) != expected:
         raise ValueError(f"Shibor registry tenor mismatch: {sorted(set(by_field) ^ expected)}")
+    retrieved = datetime.fromisoformat(snapshot.retrieved_at).astimezone(SHANGHAI)
     records: list[dict[str, Any]] = []
     for row in document.get("records", []):
         reference_date = datetime.strptime(row["showDateCN"], "%Y-%m-%d").date()
         release_at = datetime.combine(reference_date, time(11, 0), SHANGHAI)
+        tradable_at = max(retrieved, release_at + timedelta(minutes=5))
         for field in sorted(expected, key=lambda item: list(by_field).index(item)):
             spec = by_field[field]
             records.append(
@@ -124,6 +128,7 @@ def parse_shibor(
                     source_record_id=f"{reference_date.isoformat()}|{field}",
                     release_at=release_at,
                     available_at=release_at,
+                    tradable_at=tradable_at,
                     availability_evidence="official_scheduled_publication_time_not_observed_latency",
                     snapshot=snapshot,
                 )
@@ -136,46 +141,86 @@ def parse_shibor(
 def _publication_timestamp(text: str) -> datetime:
     visible = html.unescape(re.sub(r"<[^>]+>", " ", text))
     normalized = " ".join(visible.split())
-    match = re.search(r"发布时间[：:]\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})", normalized)
+    prefixed = re.search(
+        r"发布时间[：:]?\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2})",
+        normalized,
+    )
+    match = prefixed or re.search(
+        r"(?<![\d/-])(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+(\d{1,2}:\d{2})(?!\d)",
+        normalized,
+    )
     if not match:
         raise ValueError("PMI release page is missing an observed publication timestamp")
-    return datetime.strptime(" ".join(match.groups()), "%Y-%m-%d %H:%M").replace(tzinfo=SHANGHAI)
+    year, month, day, clock = match.groups()
+    return datetime.strptime(f"{year}-{month}-{day} {clock}", "%Y-%m-%d %H:%M").replace(tzinfo=SHANGHAI)
 
 
-def _manufacturing_rows(text: str) -> list[list[str]]:
-    parser = _TableParser()
-    parser.feed(text)
-    candidates: list[list[list[str]]] = []
-    for table in parser.tables:
-        dated = [row for row in table if row and re.fullmatch(r"\d{4}\s*年\s*\d{1,2}\s*月", row[0])]
-        if len(dated) >= 10 and all(len(row) >= 7 for row in dated):
-            candidates.append(dated)
-    if not candidates:
-        raise ValueError("PMI manufacturing table was not found")
-    return candidates[0]
+def _period(cell: str) -> str | None:
+    match = re.search(r"(?<!\d)(\d{4})\D{1,8}(\d{1,2})(?!\d)", cell)
+    if match is None:
+        return None
+    year, month = int(match.group(1)), int(match.group(2))
+    return f"{year:04d}-{month:02d}" if 1 <= month <= 12 else None
+
+
+def _rolling_rows(tables: list[list[list[str]]]) -> list[tuple[str, list[float]]]:
+    for table in tables:
+        dated = [row for row in table if row and _period(row[0]) is not None and len(row) >= 7]
+        if len(dated) >= 10:
+            return [(_period(row[0]) or "", [float(value) for value in row[1:7]]) for row in dated]
+    return []
+
+
+def _legacy_rows(tables: list[list[list[str]]]) -> list[tuple[str, list[float]]]:
+    for table in tables:
+        for pmi_index, row in enumerate(table):
+            if not row or row[0].strip().upper() != "PMI" or pmi_index == 0:
+                continue
+            header = table[pmi_index - 1]
+            periods = [_period(cell) for cell in header[1:]]
+            periods = [period for period in periods if period is not None]
+            series_rows = table[pmi_index:pmi_index + 6]
+            if not periods or len(series_rows) != 6:
+                continue
+            try:
+                return [
+                    (period, [float(series_row[column + 1]) for series_row in series_rows])
+                    for column, period in enumerate(periods)
+                ]
+            except (IndexError, ValueError):
+                continue
+    return []
 
 
 def parse_pmi_release(payload: bytes, snapshot: RawSnapshot) -> pd.DataFrame:
     text = payload.decode("utf-8", errors="strict")
     published_at = _publication_timestamp(text)
+    parser = _TableParser()
+    parser.feed(text)
+    observations = _rolling_rows(parser.tables)
+    layout = "rolling"
+    if not observations:
+        observations = _legacy_rows(parser.tables)
+        layout = "legacy_horizontal"
+    if not observations:
+        raise ValueError("PMI manufacturing table was not found")
     records: list[dict[str, Any]] = []
-    for row in _manufacturing_rows(text):
-        match = re.fullmatch(r"(\d{4})\s*年\s*(\d{1,2})\s*月", row[0])
-        assert match is not None
-        reference_period = f"{int(match.group(1)):04d}-{int(match.group(2)):02d}"
-        for series_id, field, position in PMI_FIELDS:
+    for reference_period, values in observations:
+        for (series_id, field, position), value in zip(PMI_FIELDS, values, strict=True):
+            assert position < len(values)
             records.append(
                 _base_record(
                     series_id=series_id,
                     reference_period=reference_period,
-                    value=float(row[position]),
+                    value=value,
                     unit="diffusion_index_percent",
                     seasonal_adjustment="seasonally_adjusted",
                     source_id=snapshot.source_id,
-                    source_record_id=f"table1|{reference_period}|{field}",
+                    source_record_id=f"{layout}|{reference_period}|{field}",
                     release_at=published_at,
                     available_at=published_at,
-                    availability_evidence="observed_release_page_timestamp_conservative_for_rolling_history",
+                    tradable_at=published_at,
+                    availability_evidence="observed_release_page_timestamp",
                     snapshot=snapshot,
                 )
             )

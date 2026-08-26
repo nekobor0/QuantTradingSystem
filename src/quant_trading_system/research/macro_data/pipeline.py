@@ -1,4 +1,4 @@
-"""Fetch, snapshot, normalize, validate, and gate macro samples."""
+"""Fetch, snapshot, normalize, validate, and gate macro observations."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def fetch_public_url(url: str, *, method: str, timeout_seconds: int = 30, attemp
         method=method.upper(),
         headers={
             "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
-            "User-Agent": "QuantTradingSystem-R011-research-sample/1.0",
+            "User-Agent": "QuantTradingSystem-R011-internal-research/1.0",
         },
     )
     last_error: Exception | None = None
@@ -66,13 +66,17 @@ def validate_canonical(frame: pd.DataFrame, specs: tuple[SeriesSpec, ...]) -> di
     checks["unique_series_period_vintage"] = not frame.duplicated(key).any()
     checks["no_null_contract_fields"] = not frame[[
         "series_id", "reference_period", "value", "source_id", "release_at", "available_at",
-        "retrieved_at", "vintage_id", "raw_sha256",
+        "tradable_at", "retrieved_at", "vintage_id", "raw_sha256",
     ]].isna().any().any()
     release = pd.to_datetime(frame["release_at"], utc=True, errors="coerce")
     available = pd.to_datetime(frame["available_at"], utc=True, errors="coerce")
+    tradable = pd.to_datetime(frame["tradable_at"], utc=True, errors="coerce")
     retrieved = pd.to_datetime(frame["retrieved_at"], utc=True, errors="coerce")
-    checks["timestamps_parse"] = not (release.isna().any() or available.isna().any() or retrieved.isna().any())
+    checks["timestamps_parse"] = not (
+        release.isna().any() or available.isna().any() or tradable.isna().any() or retrieved.isna().any()
+    )
     checks["available_not_before_release"] = bool((available >= release).all())
+    checks["tradable_not_before_available"] = bool((tradable >= available).all())
     checks["retrieved_not_before_available"] = bool((retrieved >= available).all())
     by_id = {item.series_id: item for item in specs}
     checks["registered_series_only"] = set(frame["series_id"]).issubset(by_id)
@@ -97,8 +101,8 @@ def _run_sample(
     extension: str,
     parser: Callable[[bytes, object], pd.DataFrame],
 ) -> dict[str, object]:
-    retrieved_at = datetime.now(timezone.utc)
     response = fetch_public_url(request_url, method=method)
+    retrieved_at = datetime.now(timezone.utc)
     snapshot = capture_raw_snapshot(
         output_root=output_root,
         source_id=source_id,
@@ -115,13 +119,13 @@ def _run_sample(
     validation = validate_canonical(frame, specs)
     normalized_path = output_root / "normalized" / source_id / f"{snapshot.sha256}.parquet"
     write_normalized_snapshot(frame, normalized_path)
-    readiness = "VALIDATED_PENDING_HUMAN_CONFIRMATION" if validation["passed"] else "QUARANTINED"
+    readiness = "VALIDATED_DECISIONS_CONFIRMED" if validation["passed"] else "QUARANTINED"
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "source_id": source_id,
         "readiness": readiness,
         "research_ready": False,
-        "human_confirmation_required": True,
+        "human_confirmation_required": False,
         "normalized_path": str(normalized_path.resolve()),
         "snapshot": snapshot_as_dict(snapshot),
         "validation": validation,

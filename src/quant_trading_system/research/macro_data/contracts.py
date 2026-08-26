@@ -25,6 +25,7 @@ CANONICAL_COLUMNS = [
     "source_record_id",
     "release_at",
     "available_at",
+    "tradable_at",
     "availability_evidence",
     "retrieved_at",
     "vintage_id",

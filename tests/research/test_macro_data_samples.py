@@ -75,6 +75,7 @@ def test_shibor_parser_emits_eight_tenors_with_conservative_release_time():
     assert set(frame["availability_evidence"]) == {
         "official_scheduled_publication_time_not_observed_latency"
     }
+    assert set(frame["tradable_at"]) == {"2026-08-25T20:00:00+08:00"}
 
 
 def test_pmi_parser_keeps_rolling_history_in_one_observed_vintage():
@@ -97,6 +98,27 @@ def test_pmi_parser_keeps_rolling_history_in_one_observed_vintage():
     assert frame.iloc[0]["available_at"] == "2026-07-31T09:30:00+08:00"
 
 
+def test_pmi_parser_supports_legacy_horizontal_release_table():
+    payload = """
+    <html><body><p>2012/03/01 09:00</p><table>
+      <tr><td>指标</td><td>2012年2月</td><td>2012年1月</td></tr>
+      <tr><td>PMI</td><td>51.0</td><td>50.5</td></tr>
+      <tr><td>生产</td><td>53.8</td><td>53.6</td></tr>
+      <tr><td>新订单</td><td>51.0</td><td>50.4</td></tr>
+      <tr><td>原材料库存</td><td>48.8</td><td>49.7</td></tr>
+      <tr><td>从业人员</td><td>49.5</td><td>47.1</td></tr>
+      <tr><td>供应商配送时间</td><td>50.3</td><td>49.7</td></tr>
+    </table></body></html>
+    """.encode()
+    frame = parse_pmi_release(payload, _snapshot("nbs_pmi_release_archive"))
+    assert len(frame) == 12
+    assert set(frame["reference_period"]) == {"2012-01", "2012-02"}
+    assert set(frame["release_at"]) == {"2012-03-01T09:00:00+08:00"}
+    assert frame.query(
+        "series_id == 'CN.PMI.MFG.HEADLINE' and reference_period == '2012-02'"
+    ).iloc[0]["value"] == 51.0
+
+
 def test_validation_rejects_lookahead_and_out_of_bounds_values():
     registry = load_registry(REGISTRY)
     frame = pd.DataFrame({
@@ -106,6 +128,7 @@ def test_validation_rejects_lookahead_and_out_of_bounds_values():
         "source_id": ["cfets_shibor_public"],
         "release_at": ["2026-08-25T11:00:00+08:00"],
         "available_at": ["2026-08-25T10:59:00+08:00"],
+        "tradable_at": ["2026-08-25T11:05:00+08:00"],
         "retrieved_at": ["2026-08-25T12:00:00+08:00"],
         "vintage_id": ["v1"],
         "raw_sha256": ["a" * 64],
