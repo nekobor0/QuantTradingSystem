@@ -64,8 +64,8 @@ def _summary(audit: dict[str, object]) -> str:
     )
 
 
-def run_shadow(output_root: Path, start: str = "2009-06", end: str = "2026-07") -> dict[str, object]:
-    result = run_history_shadow(output_root, start, end)
+def run_shadow(output_root: Path, start: str = "2009-06", end: str = "2026-07", *, refresh_listing: bool = False) -> dict[str, object]:
+    result = run_history_shadow(output_root, start, end, refresh_listing=refresh_listing)
     frame = result.pop("_frame")
     if isinstance(frame, pd.DataFrame) and not frame.empty:
         write_canonical_v2_snapshot(frame, output_root / "normalized" / "pmi_state_full_range_shadow.parquet")
@@ -83,13 +83,14 @@ def main() -> None:
     parser.add_argument("--mode", choices=("shadow", "full"), default="shadow")
     parser.add_argument("--start", default="2009-06")
     parser.add_argument("--end", default="2026-07")
+    parser.add_argument("--refresh-listing", action="store_true")
     parser.add_argument("--output-root", type=Path, default=ROOT / "artifacts" / "macro_r011")
     args = parser.parse_args()
     if args.mode == "full":
         result = {"blocked": True, "blockers": [{"code": "FULL_HISTORY_NOT_ALLOWED", "detail": "execution manifest gate"}], "research_ready": False}
         print(json.dumps(result, ensure_ascii=False, indent=2))
         raise SystemExit(2)
-    result = run_shadow(args.output_root, args.start, args.end)
+    result = run_shadow(args.output_root, args.start, args.end, refresh_listing=args.refresh_listing)
     print(json.dumps({"audit": result["audit"], "validation": result["validation"]}, ensure_ascii=False, indent=2))
     raise SystemExit(0 if result["validation"]["passed"] else 1)  # type: ignore[index]
 
