@@ -16,6 +16,7 @@ from quant_trading_system.research.macro_data.adapters import (
 from quant_trading_system.research.macro_data.backfill import _repo_outcome_status, _unexplained_repo_dates
 from quant_trading_system.research.macro_data.contracts import RawSnapshot
 from scripts.data_lake.run_macro_w1_rates_full import count_independent_cfets_paths
+from scripts.data_lake.run_macro_w1_rates_reparse import page_funnel
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -288,3 +289,24 @@ def _validator_fails(fixture_root: Path) -> bool:
         return not bool(validate_gold(ROOT / "config" / "macro_w1_rates_contract.json", fixture_root)["passed"])
     except (KeyError, ValueError, TypeError):
         return True
+
+
+def test_page_funnel_separates_parse_success_from_observation_emission():
+    details = {
+        "omo": [
+            {"status": "PARSED", "observation_rows": 1},
+            {"status": "PARSED", "observation_rows": 0},
+            {"status": "QUARANTINED", "observation_rows": 0},
+        ],
+        "mlf": [{"status": "PARSED", "observation_rows": 0}],
+    }
+    result = page_funnel(details, {"omo": {"relevant_pages": 4}, "mlf": {"relevant_pages": 1}})
+    assert result["omo"] == {
+        "candidate_pages_discovered": 4,
+        "raw_pages_attempted": 3,
+        "pages_parsed": 2,
+        "pages_with_observations": 1,
+        "parsed_omission_only_pages": 1,
+        "unresolved_parse_failures": 1,
+    }
+    assert result["mlf"]["pages_with_observations"] == 0

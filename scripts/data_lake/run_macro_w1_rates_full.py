@@ -176,6 +176,7 @@ def _fetch_and_parse(
             "url": item["url"],
             "page_timestamp": parsed.page_timestamp.isoformat(),
             "event_kind": parsed.event_kind,
+            "observation_rows": int(len(parsed.observations)),
             "omissions": list(parsed.omissions),
             "snapshot": snapshot_as_dict(snapshot),
         }, parsed.observations
@@ -331,13 +332,27 @@ def run_full_history(
     combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=CANONICAL_COLUMNS)
     if not combined.empty:
         combined = combined.drop_duplicates(["series_id", "reference_period", "vintage_id"]).sort_values(["reference_period", "series_id"]).reset_index(drop=True)
-        destination = output_root / "curated" / "pboc_omo_mlf_full_history.parquet"
+        destination = output_root / "curated" / "pboc_omo_mlf_official_event_history.parquet"
         write_normalized_snapshot(combined, destination)
     omissions = [item for details in event_details.values() for detail in details for item in detail.get("omissions", [])]
     mlf_rate_rows = int(((combined["series_id"] == "CN.PBOC.MLF.1Y.RATE") & (combined["reference_period"] >= "2025-03-01")).sum()) if not combined.empty else 0
     duplicate_keys = int(combined.duplicated(["series_id", "reference_period", "vintage_id"]).sum()) if not combined.empty else 0
     parse_rates = {
         kind: (sum(item.get("status") == "PARSED" for item in details) / len(details) if details else None)
+        for kind, details in event_details.items()
+    }
+    page_funnel = {
+        kind: {
+            "candidate_pages_discovered": int(discovery.get(kind, {}).get("relevant_pages", 0)),
+            "raw_pages_attempted": len(details),
+            "pages_parsed": sum(item.get("status") == "PARSED" for item in details),
+            "pages_with_observations": sum(int(item.get("observation_rows", 0)) > 0 for item in details),
+            "parsed_omission_only_pages": sum(
+                item.get("status") == "PARSED" and int(item.get("observation_rows", 0)) == 0
+                for item in details
+            ),
+            "unresolved_parse_failures": sum(item.get("status") != "PARSED" for item in details),
+        }
         for kind, details in event_details.items()
     }
     unexplained = [
@@ -348,20 +363,32 @@ def run_full_history(
     ]
     cfets_paths = _cfets_evidence(output_root, output_root / "audits" / "w1_rates_shadow.json")
     audit = {
-        "scope": {"start": start, "end": end, "four_series_only": True, "research_ready": False},
+        "scope": {
+            "four_series_only": True,
+            "cfets_shadow_validation_window": {"start": start, "end": end},
+            "pboc_collection": "all_official_event_pages_discovered_at_run_time",
+            "research_ready": False,
+        },
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "calendar": calendar,
         "pboc": {
             "discovery": discovery,
             "parse_counts": {kind: sum(item.get("status") == "PARSED" for item in details) for kind, details in event_details.items()},
             "parse_rates": parse_rates,
+            "page_funnel": page_funnel,
+            "page_funnel_population_note": "candidate_pages_discovered and raw_pages_attempted refer to this same network run",
             "events": event_details,
+            "series_semantics": {
+                "CN.PBOC.OMO.REVERSE_REPO.7D.RATE": "sparse official operation-rate events; not a daily panel",
+                "CN.PBOC.MLF.1Y.RATE": "sparse official unified-rate events; not a monthly panel; structurally undefined from 2025-03-01",
+            },
             "structural_omissions": [item for item in omissions if item.get("state") == "UNIFIED_RATE_STRUCTURALLY_UNDEFINED"],
             "mlf_post_2025_03_rate_rows": mlf_rate_rows,
         },
         "cfets": {"independent_mechanisms": cfets_paths, "independent_mechanism_count": count_independent_cfets_paths(cfets_paths), "formal_backfill": False, "calendar_blocked": calendar.get("status") != "OK"},
-        "normalized": {"rows": len(combined), "duplicate_primary_keys": duplicate_keys, "raw_hashes_valid": all(re.fullmatch(r"[0-9a-f]{64}", item["snapshot"]["sha256"]) for item in captured if "snapshot" in item)},
+        "normalized": {"dataset": "pboc_omo_mlf_official_event_history.parquet", "rows": len(combined), "duplicate_primary_keys": duplicate_keys, "raw_hashes_valid": all(re.fullmatch(r"[0-9a-f]{64}", item["snapshot"]["sha256"]) for item in captured if "snapshot" in item)},
         "quarantine": quarantines,
+        "quarantine_history": quarantines,
         "unexplained": unexplained + ([{"kind": "calendar", **calendar}] if calendar.get("status") != "OK" else []),
         "captured": captured,
         "blocked": True,
@@ -369,19 +396,24 @@ def run_full_history(
     }
     _write_json(output_root / "audits" / "w1_rates_full_history.json", audit)
     (output_root / "audits" / "w1_rates_full_history_summary.md").write_text(
-        "# R011 full-history source summary\n\n"
-        f"PBOC OMO discovered {discovery.get('omo', {}).get('relevant_pages', 0)} relevant announcement pages across {discovery.get('omo', {}).get('index_pages', 0)} index pages; parse rate={parse_rates['omo']}.\n\n"
-        f"PBOC MLF official search discovered {discovery.get('mlf', {}).get('relevant_pages', 0)} candidate pages across {discovery.get('mlf', {}).get('search_pages', 0)} search pages; parse rate={parse_rates['mlf']}; post-2025-03 MLF rate rows={mlf_rate_rows}.\n\n"
+        "# R011 PBOC official event-history source summary\n\n"
+        f"PBOC OMO page funnel: {json.dumps(page_funnel['omo'], ensure_ascii=False)}. Parse success uses raw pages attempted as its denominator; observation-emitting pages are reported separately.\n\n"
+        f"PBOC MLF page funnel: {json.dumps(page_funnel['mlf'], ensure_ascii=False)}. The output is a sparse unified-rate event series, not a monthly panel; post-2025-03 MLF rate rows={mlf_rate_rows}.\n\n"
         f"CFETS remains blocked: calendar status={calendar.get('status')}; three distinct official mechanisms are recorded as evidence only and no CFETS values were promoted to curated.\n\n"
         "No forward-fill, interpolation, old MLF rate continuation, fixing rate, or third-party value was used. Research-ready promotion is prohibited.\n",
         encoding="utf-8",
     )
     state_dir = output_root / "state" / "w1_rates_luna_full"
     state_dir.mkdir(parents=True, exist_ok=True)
+    calendar_line = (
+        "- Strategy calendar: `OK`; requested window and one later session are covered.\n"
+        if calendar.get("status") == "OK"
+        else f"- Strategy calendar: `BLOCKED`; {calendar.get('error', 'not supplied')}.\n"
+    )
     (state_dir / "BLOCKED.md").write_text(
         "# R011 full-history BLOCKED\n\n"
         "Status is intentionally blocked and `research_ready=false`.\n\n"
-        f"- CFETS real strategy calendar: `{calendar.get('status')}`; {calendar.get('error', 'not supplied')}.\n"
+        f"{calendar_line}"
         f"- CFETS formal history: not promoted; three independent official mechanism records are in `audits/w1_rates_full_history.json`.\n"
         f"- PBOC unexplained items: {len(unexplained)}; see full audit and quarantine paths.\n"
         "- No third-party data was used.\n",
