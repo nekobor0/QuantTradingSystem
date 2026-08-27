@@ -8,6 +8,7 @@ from pathlib import Path
 
 from quant_trading_system.research.macro_data.w1_pmi_history import (
     SERIES,
+    discover_listing_pages,
     expected_by_series,
     expected_cells,
     run_history_shadow,
@@ -71,6 +72,28 @@ def test_manifest_tamper_and_required_field_loss_turn_hash_audit_red_then_green(
     assert missing_field["valid"] is False
     manifest.write_text(json.dumps(document), encoding="utf-8")
     assert verify_manifest_hashes([manifest])["valid"]
+
+
+def test_listing_discovery_reuses_success_retries_failures_and_deduplicates_urls(tmp_path: Path) -> None:
+    calls: list[str] = []
+
+    def fetcher(url: str) -> tuple[int, dict[str, str], bytes, str | None]:
+        calls.append(url)
+        if url.endswith("index_1.html"):
+            return 503, {"Content-Type": "text/html"}, b"temporary", "HTTP_503"
+        payload = '<a href="./202607/t20260731_1964253.html" title="采购经理指数运行情况">x</a><a href="./202607/t20260731_1964253.html">duplicate</a>'.encode("utf-8")
+        return 200, {"Content-Type": "text/html"}, payload, None
+
+    first = discover_listing_pages(tmp_path, page_count=2, retries=3, fetcher=fetcher)
+    assert first["fetched_pages"] == 1
+    assert len(first["candidate_urls"]) == 1
+    assert len(first["failed_attempts"]) == 3
+    assert calls.count("https://www.stats.gov.cn/sj/zxfb/") == 1
+    second = discover_listing_pages(
+        tmp_path, page_count=1, retries=3,
+        fetcher=lambda url: (_ for _ in ()).throw(AssertionError("successful manifest was not reused")),
+    )
+    assert second["reused_pages"] == 1
 
 
 def test_unified_runner_dispatches_shadow_and_keeps_full_blocked() -> None:

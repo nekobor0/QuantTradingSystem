@@ -7,17 +7,19 @@ import html
 import json
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 import pandas as pd
 
 from .adapters import _TableParser
-from .contracts import CANONICAL_COLUMNS, RawSnapshot, validate_canonical_v2
+from .contracts import CANONICAL_COLUMNS, RawSnapshot, capture_raw_snapshot, validate_canonical_v2
 from .w1_execution import build_audit, expected_periods, validate_audit
 
 
@@ -25,6 +27,7 @@ SOURCE_ID = "nbs_pmi_state_release"
 ARCHIVE_SOURCE_ID = "nbs_pmi_release_archive"
 LISTING_SOURCE_ID = "nbs_pmi_state_release_index"
 LISTING_URL = "https://www.stats.gov.cn/sj/zxfb/"
+LISTING_PAGE_COUNT = 67
 NBS_SEARCH_URL = "https://api.so-gov.cn/query/s"
 NBS_SITE_CODE = "bm36000002"
 PARSER_VERSION = "r011.w1.pmi.history.v1"
@@ -247,6 +250,93 @@ def _release_url(href: str) -> str:
     return urljoin(LISTING_URL, href)
 
 
+def _listing_page_url(index: int) -> str:
+    return LISTING_URL if index == 0 else f"{LISTING_URL}index_{index}.html"
+
+
+def _fetch_listing(url: str) -> tuple[int, dict[str, str], bytes, str | None]:
+    request = Request(url, headers={"User-Agent": "QuantTradingSystem-W1-research/1.0", "Accept": "text/html"})
+    try:
+        with urlopen(request, timeout=8) as response:
+            return int(response.status), dict(response.headers.items()), response.read(), None
+    except HTTPError as exc:
+        return int(exc.code), dict(exc.headers.items()), exc.read(), f"HTTP_{exc.code}"
+    except (URLError, TimeoutError) as exc:
+        return 0, {}, b"", f"NETWORK_{exc}"
+
+
+def _existing_listing_payload(output_root: Path, url: str) -> bytes | None:
+    root = output_root / "raw" / LISTING_SOURCE_ID
+    for manifest_path in sorted(root.rglob("*.manifest.json")):
+        manifest, payload, valid = _manifest_payload(manifest_path)
+        if valid and manifest.get("response", {}).get("status") == 200 and manifest.get("request", {}).get("url") == url:
+            return payload
+    return None
+
+
+def discover_listing_pages(
+    output_root: Path,
+    *,
+    page_count: int = LISTING_PAGE_COUNT,
+    retries: int = 3,
+    fetcher: Callable[[str], tuple[int, dict[str, str], bytes, str | None]] | None = None,
+) -> dict[str, Any]:
+    if page_count < 1 or retries < 1:
+        raise ValueError("page_count and retries must be positive")
+    fetch = fetcher or _fetch_listing
+    candidate_urls: set[str] = set()
+    reused = 0
+    fetched = 0
+    failures: list[dict[str, Any]] = []
+    parse_failures: list[dict[str, Any]] = []
+    for index in range(page_count):
+        url = _listing_page_url(index)
+        payload = _existing_listing_payload(output_root, url)
+        if payload is not None:
+            reused += 1
+        else:
+            for attempt in range(1, retries + 1):
+                status, headers, response, error = fetch(url)
+                snapshot = capture_raw_snapshot(
+                    output_root=output_root,
+                    source_id=LISTING_SOURCE_ID,
+                    payload=response,
+                    retrieved_at=datetime.now(timezone.utc),
+                    request_method="GET",
+                    request_url=url,
+                    response_status=status,
+                    response_headers=headers,
+                    extension="html",
+                )
+                if error is None and not _pseudo(status, headers, response):
+                    payload = response
+                    fetched += 1
+                    break
+                failures.append({"url": url, "attempt": attempt, "status": status, "reason": error or "PSEUDO_RESPONSE", "raw_sha256": snapshot.sha256})
+        if payload is None:
+            continue
+        try:
+            parser = _ReleaseLinks()
+            parser.feed(payload.decode("utf-8", errors="strict"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            parse_failures.append({"url": url, "reason": f"{type(exc).__name__}: {exc}"})
+            continue
+        for href, title in parser.links:
+            if "采购经理指数" not in title or "解读" in title or "答记者问" in title:
+                continue
+            release_url = _release_url(href)
+            if release_url.startswith("https://www.stats.gov.cn/") and release_url.lower().endswith((".html", ".htm")):
+                candidate_urls.add(release_url)
+    return {
+        "page_count": page_count,
+        "reused_pages": reused,
+        "fetched_pages": fetched,
+        "failed_attempts": failures,
+        "parse_failures": parse_failures,
+        "candidate_urls": sorted(candidate_urls),
+    }
+
+
 def _listing_candidates(index_manifest_paths: Iterable[Path]) -> set[str]:
     candidates: set[str] = set()
     for manifest_path in index_manifest_paths:
@@ -335,11 +425,12 @@ def _vintage_periods(payload: bytes, direct_period: str) -> dict[str, set[str]]:
     return result
 
 
-def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "2026-07") -> dict[str, Any]:
+def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "2026-07", *, refresh_listing: bool = False) -> dict[str, Any]:
     entries, catalog_manifest_paths = _archive_entries(output_root, start, end)
     hash_audit = verify_manifest_hashes(catalog_manifest_paths)
+    listing_discovery = discover_listing_pages(output_root) if refresh_listing else None
     index_manifests = list((output_root / "raw" / LISTING_SOURCE_ID).rglob("*.manifest.json"))
-    listing_urls = _listing_candidates(index_manifests)
+    listing_urls = set(listing_discovery["candidate_urls"]) if listing_discovery is not None else _listing_candidates(index_manifests)
     direct_periods = sorted({str(item["reference_period"]) for item in entries})
     expected = expected_cells(start, end)
     records: list[dict[str, Any]] = []
@@ -412,7 +503,13 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
         "official_listing": LISTING_URL,
         "official_search": {"url": NBS_SEARCH_URL, "siteCode": NBS_SITE_CODE, "query_semantics": "backfill.py modern title search plus year-bounded legacy title search"},
         "mechanisms": {
-            "current_listing": {"index_manifest_count": len(index_manifests), "discovered_url_count": len(listing_urls), "period_count": len(listing_periods), "periods": listing_periods},
+            "current_listing": {
+                "index_manifest_count": len(index_manifests),
+                "discovered_url_count": len(listing_urls),
+                "period_count": len(listing_periods),
+                "periods": listing_periods,
+                "refresh": listing_discovery,
+            },
             "backfill_official_search_replay": {"catalog_count": len(search_periods), "period_count": len(search_periods), "periods": search_periods},
             "union_period_count": len(set(listing_periods) | set(search_periods)),
             "catalog_direct_period_count": len(direct_periods),
