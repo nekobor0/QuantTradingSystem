@@ -2,7 +2,7 @@
   "schema_version": 2,
   "contract_id": "R011.W1.MONEY_CREDIT.V2",
   "package_id": "money_credit",
-  "status": "CONTRACT_FROZEN_GOLD_PENDING",
+  "status": "GOLD_BLOCKED_PARTIAL_5_OF_7",
   "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
   "source_whitelist": ["PBOC_STATS"],
   "primary_key": ["series_id", "reference_period", "vintage_id"],

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-08-27",
+  "commit_policy": "ignored_local_market_data_never_commit",
+  "packages": {
+    "rates_liquidity": {
+      "status": "GOLD_BLOCKED_PARTIAL_4_OF_11",
+      "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_rates",
+      "fixtures": ["2026-08-24", "2026-08-25"],
+      "covered_series": ["CN.REPO.DR007", "CN.REPO.R007", "CN.PBOC.OMO.REVERSE_REPO.7D.RATE", "CN.PBOC.MLF.1Y.RATE"],
+      "blocked_series": ["CN.SHIBOR.ON", "CN.SHIBOR.1W", "CN.SHIBOR.3M", "CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y", "CN.LPR.1Y", "CN.LPR.5Y_PLUS"],
+      "validator": "scripts/data_lake/validate_macro_w1_rates_contract.py"
+    },
+    "pmi_state": {
+      "status": "GOLD_READY_SHADOW_ONLY",
+      "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_pmi_state",
+      "fixtures": ["2026-06", "2026-07"],
+      "required_files": ["nbs_pmi.html", "expected.json", "checksums.json"],
+      "official_urls": {
+        "2026-06": ["https://www.stats.gov.cn/sj/zxfbhjd/202606/t20260630_1964032.html"],
+        "2026-07": ["https://www.stats.gov.cn/sj/zxfbhjd/202607/t20260731_1964253.html"]
+      }
+    },
+    "prices": {
+      "status": "GOLD_READY_SHADOW_ONLY",
+      "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_prices",
+      "fixtures": ["2026-06", "2026-07"],
+      "required_files": ["nbs_cpi.html", "nbs_ppi.html", "nbs_interpretation.html", "expected.json", "checksums.json"],
+      "official_urls": {
+        "2026-06": [
+          "https://www.stats.gov.cn/sj/zxfbhjd/202607/t20260709_1964084.html",
+          "https://www.stats.gov.cn/sj/zxfb/202607/t20260709_1964083.html",
+          "https://www.stats.gov.cn/zwfwck/sjfb/202607/t20260709_1964082.html"
+        ],
+        "2026-07": [
+          "https://www.stats.gov.cn/sj/zxfbhjd/202608/t20260809_1965008.html",
+          "https://www.stats.gov.cn/sj/zxfb/202608/t20260809_1965007.html",
+          "https://www.stats.gov.cn/sj/zxfbhjd/202608/t20260809_1965009.html"
+        ]
+      }
+    },
+    "money_credit": {
+      "status": "GOLD_BLOCKED_PARTIAL_5_OF_7",
+      "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_money_credit",
+      "fixtures": ["2026-06", "2026-07"],
+      "required_files": ["pboc_money_supply.htm", "pboc_tsf_flow.htm", "pboc_tsf_stock.htm", "expected.json", "checksums.json"],
+      "covered_series": ["CN.MONEY.M1.BALANCE", "CN.MONEY.M2.BALANCE", "CN.TSF.FLOW", "CN.TSF.STOCK", "CN.TSF.GOV_BOND.FLOW"],
+      "blocked_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"],
+      "blocker": "The current official tables expose money stocks and AFRE fields but no directly reported monthly national total-loan or corporate-medium-long flow. Generic differencing is forbidden by the frozen contract.",
+      "official_urls": {
+        "2026-06": ["https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081416590597261.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417010772070.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417011913181.htm"],
+        "2026-07": ["https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081416590597261.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417010772070.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417011913181.htm"]
+      }
+    },
+    "growth_output": {
+      "status": "GOLD_READY_SHADOW_ONLY",
+      "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_growth_output",
+      "fixtures": ["2026-Q1", "2026-Q2"],
+      "required_files": ["nbs_gdp.html", "nbs_industrial.html", "expected.json", "checksums.json"],
+      "official_urls": {
+        "2026-Q1": ["https://www.stats.gov.cn/sj/zxfbhjd/202604/t20260417_1963336.html", "https://www.stats.gov.cn/sj/zxfb/202604/t20260416_1963329.html"],
+        "2026-Q2": ["https://www.stats.gov.cn/sj/zxfb/202607/t20260716_1964142.html", "https://www.stats.gov.cn/sj/zxfb/202607/t20260715_1964123.html"]
+      }
+    }
+  }
+}

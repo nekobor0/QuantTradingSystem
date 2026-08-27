@@ -2,7 +2,7 @@
   "schema_version": 2,
   "contract_id": "R011.W1.RATES_LIQUIDITY.V2",
   "package_id": "rates_liquidity",
-  "status": "CONTRACT_FROZEN_GOLD_PENDING",
+  "status": "GOLD_BLOCKED_PARTIAL_4_OF_11",
   "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
   "source_whitelist": ["CFETS_CHINAMONEY", "PBOC_POLICY", "CHINABOND"],
   "primary_key": ["series_id", "reference_period", "vintage_id"],
