@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from quant_trading_system.research.macro_data.w1_execution import build_audit, validate_audit
 from scripts.data_lake.validate_macro_w1_gold import validate_registry
 from scripts.data_lake.run_macro_w1_pmi_state_enablement import run_shadow as run_pmi_shadow
+from scripts.data_lake.run_macro_w1_pmi_state_full import run_full as run_pmi_full
 
 
 def main() -> None:
@@ -41,6 +42,10 @@ def main() -> None:
             {"code": "FULL_HISTORY_NOT_ALLOWED", "detail": detail}
             for detail in package["full_blockers"]
         )
+    if args.package == "pmi_state" and args.mode == "full" and not blockers:
+        result = run_pmi_full(args.output_root, args.start, args.end, "execute")
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        raise SystemExit(2 if result.get("blocked") else 0)
     if args.package == "pmi_state" and args.mode == "shadow" and not blockers:
         result = run_pmi_shadow(args.output_root, args.start, args.end)
         output = args.output_root / "audits" / "w1_pmi_state_shadow.json"

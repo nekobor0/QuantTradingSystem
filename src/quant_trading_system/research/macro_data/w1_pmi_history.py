@@ -179,6 +179,74 @@ def parse_release(payload: bytes, reference_period: str, *, publication_fallback
     return PmiParseResult(rows, tuple(omissions), publication_at, layout)
 
 
+def _legacy_vintage_values(payload: bytes, direct_period: str) -> dict[tuple[str, str], float]:
+    parser = _TableParser()
+    parser.feed(payload.decode("utf-8", errors="strict"))
+    for rows in parser.tables:
+        for pmi_index, row in enumerate(rows):
+            if not row or str(row[0]).strip().upper() != "PMI" or pmi_index == 0:
+                continue
+            periods = [_period(str(item)) for item in rows[pmi_index - 1][1:]]
+            if not any(periods):
+                continue
+            values: dict[tuple[str, str], float] = {}
+            for column, period in enumerate(periods, start=1):
+                if period is None or period > direct_period or period < SERIES_START["CN.PMI.MFG.HEADLINE"]:
+                    continue
+                try:
+                    values[("CN.PMI.MFG.HEADLINE", period)] = _number(row[column])
+                    values[("CN.PMI.MFG.NEW_ORDERS", period)] = _number(rows[pmi_index + 2][column])
+                except (IndexError, ValueError):
+                    continue
+            return values
+    return {}
+
+
+def _rolling_vintage_values(tables: list[pd.DataFrame], direct_period: str) -> dict[tuple[str, str], float]:
+    mappings = (
+        {1: "CN.PMI.MFG.HEADLINE", 3: "CN.PMI.MFG.NEW_ORDERS"},
+        {1: "CN.PMI.MFG.NEW_EXPORT_ORDERS", 6: "CN.PMI.MFG.INPUT_PRICE"},
+        {1: "CN.PMI.NONMFG.ACTIVITY", 2: "CN.PMI.NONMFG.NEW_ORDERS", 3: "CN.PMI.NONMFG.INPUT_PRICE"},
+    )
+    values: dict[tuple[str, str], float] = {}
+    for table, mapping in zip(tables[:3], mappings, strict=False):
+        for row in table.itertuples(index=False, name=None):
+            period = _period(str(row[0])) if row else None
+            if period is None or period > direct_period:
+                continue
+            for column, series_id in mapping.items():
+                if period < SERIES_START[series_id] or column >= len(row):
+                    continue
+                try:
+                    values.setdefault((series_id, period), _number(row[column]))
+                except ValueError:
+                    continue
+    return values
+
+
+def parse_release_vintages(
+    payload: bytes,
+    direct_period: str,
+    *,
+    publication_fallback: str | None = None,
+) -> PmiParseResult:
+    direct = parse_release(payload, direct_period, publication_fallback=publication_fallback)
+    tables = pd.read_html(BytesIO(payload))
+    if direct.layout == "legacy_horizontal":
+        values = _legacy_vintage_values(payload, direct_period)
+    else:
+        values = _rolling_vintage_values(tables, direct_period)
+    if any(row["series_id"] == "CN.PMI.COMPOSITE.OUTPUT" for row in direct.rows):
+        values[("CN.PMI.COMPOSITE.OUTPUT", direct_period)] = next(
+            float(row["value"]) for row in direct.rows if row["series_id"] == "CN.PMI.COMPOSITE.OUTPUT"
+        )
+    rows = tuple(
+        {"series_id": series_id, "reference_period": period, "value": value}
+        for (series_id, period), value in sorted(values.items(), key=lambda item: (item[0][1], SERIES.index(item[0][0])))
+    )
+    return PmiParseResult(rows, direct.structural_omissions, direct.publication_at, direct.layout)
+
+
 def expected_cells(start: str, end: str) -> list[str]:
     months = expected_periods(date.fromisoformat(f"{start}-01"), date.fromisoformat(f"{end}-01"), "monthly")
     return [f"{series_id}|{period}" for series_id in SERIES for period in months if period >= SERIES_START[series_id]]
@@ -402,30 +470,27 @@ def _record(row: dict[str, Any], snapshot: RawSnapshot, publication_at: str, lay
         "source_id": SOURCE_ID, "source_record_id": f"{layout}|{row['reference_period']}|{row['series_id']}",
         "release_at": publication_at, "available_at": publication_at, "tradable_at": publication_at,
         "availability_evidence": "official_nbs_release_page_publication_timestamp",
-        "retrieved_at": snapshot.retrieved_at, "vintage_id": f"{ARCHIVE_SOURCE_ID}:{snapshot.sha256[:16]}",
+        "retrieved_at": snapshot.retrieved_at,
+        "vintage_id": f"{ARCHIVE_SOURCE_ID}:{hashlib.sha256(snapshot.request_url.encode('utf-8')).hexdigest()[:16]}:{snapshot.sha256[:16]}",
         "raw_sha256": snapshot.sha256, "parser_version": PARSER_VERSION,
     }
 
 
 def _vintage_periods(payload: bytes, direct_period: str) -> dict[str, set[str]]:
     result = {series_id: set() for series_id in SERIES}
-    tables = pd.read_html(BytesIO(payload))
-    for table, fields in zip(tables[:3], (SERIES[:2], SERIES[2:4], SERIES[4:7]), strict=False):
-        for row in table.itertuples(index=False, name=None):
-            period = _period(str(row[0])) if row else None
-            if period:
-                result[fields[0]].add(period)
-                if len(fields) > 1:
-                    result[fields[1]].add(period)
-                    if len(fields) > 2:
-                        result[fields[2]].add(period)
-    text = _compact(payload.decode("utf-8", errors="strict"))
-    if "综合PMI产出指数" in text:
-        result[SERIES[7]].add(direct_period)
+    for row in parse_release_vintages(payload, direct_period).rows:
+        result[str(row["series_id"])].add(str(row["reference_period"]))
     return result
 
 
-def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "2026-07", *, refresh_listing: bool = False) -> dict[str, Any]:
+def run_history_shadow(
+    output_root: Path,
+    start: str = "2009-06",
+    end: str = "2026-07",
+    *,
+    refresh_listing: bool = False,
+    run_mode: str = "shadow",
+) -> dict[str, Any]:
     entries, catalog_manifest_paths = _archive_entries(output_root, start, end)
     hash_audit = verify_manifest_hashes(catalog_manifest_paths)
     listing_discovery = discover_listing_pages(output_root) if refresh_listing else None
@@ -433,7 +498,8 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
     listing_urls = set(listing_discovery["candidate_urls"]) if listing_discovery is not None else _listing_candidates(index_manifests)
     direct_periods = sorted({str(item["reference_period"]) for item in entries})
     expected = expected_cells(start, end)
-    records: list[dict[str, Any]] = []
+    direct_records: list[dict[str, Any]] = []
+    vintage_records: list[dict[str, Any]] = []
     structural: list[dict[str, Any]] = []
     parse_failures: list[dict[str, Any]] = []
     vintage_coverage = {series_id: set() for series_id in SERIES}
@@ -445,18 +511,29 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
             continue
         try:
             fallback = f"{item.get('document_date', item['reference_period'])}T12:00:00+08:00"
-            parsed = parse_release(payload, str(item["reference_period"]), publication_fallback=fallback)
-            layout_counts[parsed.layout] = layout_counts.get(parsed.layout, 0) + 1
-            records.extend(_record(row, snapshot, parsed.publication_at, parsed.layout) for row in parsed.rows)
-            structural.extend({**omission, "url": item["url"], "raw_sha256": snapshot.sha256} for omission in parsed.structural_omissions)
-            vintage = _vintage_periods(payload, str(item["reference_period"]))
-            for series_id, periods in vintage.items():
-                vintage_coverage[series_id].update(period for period in periods if period >= SERIES_START[series_id])
+            direct = parse_release(payload, str(item["reference_period"]), publication_fallback=fallback)
+            vintage = parse_release_vintages(payload, str(item["reference_period"]), publication_fallback=fallback)
+            vintage_rows = tuple(row for row in vintage.rows if start <= str(row["reference_period"]) <= end)
+            layout_counts[direct.layout] = layout_counts.get(direct.layout, 0) + 1
+            direct_records.extend(_record(row, snapshot, direct.publication_at, direct.layout) for row in direct.rows)
+            vintage_records.extend(_record(row, snapshot, vintage.publication_at, vintage.layout) for row in vintage_rows)
+            structural.extend({**omission, "url": item["url"], "raw_sha256": snapshot.sha256} for omission in direct.structural_omissions)
+            for row in vintage_rows:
+                vintage_coverage[str(row["series_id"])].add(str(row["reference_period"]))
         except (ValueError, ImportError) as exc:
             parse_failures.append({"reference_period": item["reference_period"], "url": item["url"], "reason": f"{type(exc).__name__}: {exc}"})
-    frame = pd.DataFrame(records, columns=CANONICAL_COLUMNS)
+    direct_projection_mismatches: list[dict[str, Any]] = []
+    vintage_by_key = {
+        (str(row["series_id"]), str(row["reference_period"]), str(row["vintage_id"])): float(row["value"])
+        for row in vintage_records
+    }
+    for row in direct_records:
+        key = (str(row["series_id"]), str(row["reference_period"]), str(row["vintage_id"]))
+        if key not in vintage_by_key or vintage_by_key[key] != float(row["value"]):
+            direct_projection_mismatches.append({"key": key, "direct_value": row["value"], "vintage_value": vintage_by_key.get(key)})
+    frame = pd.DataFrame(vintage_records, columns=CANONICAL_COLUMNS)
     metadata_failures: list[str] = []
-    if records:
+    if vintage_records:
         v2 = frame.copy()
         v2["schema_version"] = 2
         v2["reference_period_start"] = v2["reference_period"]
@@ -473,10 +550,12 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
             raise ValueError(f"canonical metadata validation failed: {metadata_validation['failures']}")
         if not v2["pit_grade"].eq("A").all() or not v2["license_scope"].eq("internal_research").all():
             metadata_failures.append("frozen metadata mismatch")
+        v2["_series_order"] = v2["series_id"].map({series_id: index for index, series_id in enumerate(SERIES)})
+        v2 = v2.sort_values(["reference_period", "_series_order", "vintage_id"], kind="mergesort").drop(columns=["_series_order"]).reset_index(drop=True)
         canonical_validation = validate_canonical_v2(v2)
     else:
         canonical_validation = {"passed": True, "rows": 0, "failures": []}
-    observed = sorted({f"{row['series_id']}|{row['reference_period']}" for row in records})
+    observed = sorted({f"{row['series_id']}|{row['reference_period']}" for row in direct_records})
     observed_set = set(observed)
     missing_cells = sorted(set(expected) - observed_set)
     known_missing_periods = {"2010-04", "2010-05", "2011-06", "2011-07"}
@@ -487,7 +566,7 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
     domain_failures = int((~frame["value"].between(0, 100)).sum()) if not frame.empty else 0
     listing_periods = sorted({str(item["reference_period"]) for item in entries if item["url"] in listing_urls})
     search_periods = direct_periods
-    observed_by_series = {series_id: sorted({row["reference_period"] for row in records if row["series_id"] == series_id}) for series_id in SERIES}
+    observed_by_series = {series_id: sorted({row["reference_period"] for row in direct_records if row["series_id"] == series_id}) for series_id in SERIES}
     series_coverage = {
         series_id: {
             "expected_start": SERIES_START[series_id],
@@ -517,6 +596,11 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
         "archive_manifest_count": len(catalog_manifest_paths),
         "archive_entry_count": len(entries),
         "parse_failures": parse_failures,
+        "direct_projection_row_count": len(direct_records),
+        "full_vintage_row_count": len(vintage_records),
+        "full_vintage_period_count": len({(row["series_id"], row["reference_period"]) for row in vintage_records}),
+        "full_vintage_count": len({row["vintage_id"] for row in vintage_records}),
+        "direct_projection_mismatches": direct_projection_mismatches,
         "vintage_coverage": {series_id: {"period_count": len(periods), "min": min(periods) if periods else None, "max": max(periods) if periods else None} for series_id, periods in vintage_coverage.items()},
         "expected_by_series": expected_by_series(start, end),
         "observed_by_series": observed_by_series,
@@ -532,6 +616,11 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
             "explained_missing_cells": explained_missing,
             "official_release_page_not_discovered": page_missing,
             "raw_hash": hash_audit,
+            "direct_projection_row_count": len(direct_records),
+            "full_vintage_row_count": len(vintage_records),
+            "full_vintage_period_count": len({(row["series_id"], row["reference_period"]) for row in vintage_records}),
+            "full_vintage_count": len({row["vintage_id"] for row in vintage_records}),
+            "direct_projection_mismatches": direct_projection_mismatches,
             "metadata_failures": metadata_failures,
             "pit_grade": "A",
             "license_scope": "internal_research",
@@ -541,13 +630,17 @@ def run_history_shadow(output_root: Path, start: str = "2009-06", end: str = "20
     blockers: list[dict[str, Any]] = []
     if not hash_audit["valid"]:
         blockers.append({"code": "RAW_HASH_INVALID", "detail": "one or more archive raw bytes do not match manifest sha256"})
-    if parse_failures or unexplained or metadata_failures:
+    if parse_failures or unexplained or metadata_failures or direct_projection_mismatches:
         blockers.append({"code": "PMI_HISTORY_AUDIT_UNEXPLAINED", "detail": "parse, metadata, or missing-cell failures remain"})
     audit = build_audit(
-        package_id="pmi_state", run_mode="shadow", start=start, end=end,
+        package_id="pmi_state", run_mode=run_mode, start=start, end=end,
         expected=expected, observed=observed, sources=[source], blockers=blockers,
         unexplained_missing=unexplained, structural_omissions=[*structural, *[{"series_id": cell.split("|", 1)[0], "reference_period": cell.split("|", 1)[1], "reason": "OFFICIAL_RELEASE_PAGE_NOT_DISCOVERED"} for cell in page_missing]],
         raw_hashes_valid=hash_audit["valid"], duplicate_primary_keys=duplicates, value_domain_failures=domain_failures,
     )
     validation = validate_audit(audit)
-    return {"audit": audit, "validation": validation, "research_ready": False, "_frame": v2 if records else pd.DataFrame()}
+    return {"audit": audit, "validation": validation, "research_ready": False, "_frame": v2 if vintage_records else pd.DataFrame()}
+
+
+def run_full_candidate(output_root: Path, start: str = "2009-06", end: str = "2026-07") -> dict[str, Any]:
+    return run_history_shadow(output_root, start, end, run_mode="full")
