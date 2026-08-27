@@ -21,7 +21,7 @@ def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, ob
         "five_contracts": len(contracts) == 5,
         "package_ids_exact": {item["package_id"] for item in contracts} == set(EXPECTED),
         "all_schema_v2": all(item["schema_version"] == 2 for item in contracts),
-        "all_gold_pending": all(item["status"] == "CONTRACT_FROZEN_GOLD_PENDING" for item in contracts),
+        "all_gold_decided": all(item["status"].startswith("GOLD_") for item in contracts),
         "all_decisions_frozen": all(set(item["accepted_decisions"]) == DECISIONS for item in contracts),
         "source_whitelists_registered": all(set(item["source_whitelist"]).issubset(sources) for item in contracts),
     }

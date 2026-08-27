@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-08-27",
+  "state_machine": ["CONTRACT_FROZEN", "GOLD_READY_SHADOW_ONLY", "SHADOW_PASSED_SOL_REVIEW", "FULL_HISTORY_ALLOWED", "FULL_HISTORY_COMPLETE"],
+  "global_forbidden": ["strategy_integration", "research_ready_promotion", "live_trading"],
+  "packages": [
+    {"package_id":"rates_liquidity","order":1,"gold_state":"GOLD_BLOCKED_PARTIAL_4_OF_11","shadow_allowed":false,"full_history_allowed":false,"frequency_groups":["business_daily","monthly_event","event"]},
+    {"package_id":"pmi_state","order":2,"gold_state":"GOLD_READY_SHADOW_ONLY","shadow_allowed":true,"full_history_allowed":false,"frequency_groups":["monthly"]},
+    {"package_id":"prices","order":3,"gold_state":"GOLD_READY_SHADOW_ONLY","shadow_allowed":true,"full_history_allowed":false,"frequency_groups":["monthly"]},
+    {"package_id":"money_credit","order":4,"gold_state":"GOLD_BLOCKED_PARTIAL_5_OF_7","shadow_allowed":false,"full_history_allowed":false,"frequency_groups":["monthly"]},
+    {"package_id":"growth_output","order":5,"gold_state":"GOLD_READY_SHADOW_ONLY","shadow_allowed":true,"full_history_allowed":false,"frequency_groups":["quarterly","monthly_with_jan_feb_joint"]}
+  ],
+  "audit_required": ["schema_version", "package_id", "run_mode", "requested_window", "expected_periods", "observed_periods", "sources", "raw_hashes_valid", "duplicate_primary_keys", "value_domain_failures", "unexplained_missing", "structural_omissions", "blocked", "blockers", "research_ready"]
+}
