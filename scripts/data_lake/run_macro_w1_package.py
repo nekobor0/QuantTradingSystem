@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from quant_trading_system.research.macro_data.w1_execution import build_audit, validate_audit
 from scripts.data_lake.validate_macro_w1_gold import validate_registry
+from scripts.data_lake.run_macro_w1_pmi_state_enablement import run_shadow as run_pmi_shadow
 
 
 def main() -> None:
@@ -40,6 +41,13 @@ def main() -> None:
             {"code": "FULL_HISTORY_NOT_ALLOWED", "detail": detail}
             for detail in package["full_blockers"]
         )
+    if args.package == "pmi_state" and args.mode == "shadow" and not blockers:
+        result = run_pmi_shadow(args.output_root, args.start, args.end)
+        output = args.output_root / "audits" / "w1_pmi_state_shadow.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps({"audit": result["audit"], "validation": result["validation"], "gold": gold}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps({"output": str(output), "blocked": result["audit"]["blocked"], "validation": result["validation"]}, ensure_ascii=False, indent=2))
+        raise SystemExit(0 if result["validation"]["passed"] else 1)
     if args.mode != "gold" and not blockers:
         blockers.append({"code": "PACKAGE_RUNNER_NOT_DISPATCHED", "detail": "use the package-specific shadow implementation"})
     audit = build_audit(
@@ -56,7 +64,7 @@ def main() -> None:
     output = args.output_root / "audits" / f"w1_{args.package}_{args.mode}.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps({"audit": audit, "validation": validation, "gold": gold}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"output": str(output), "blocked": audit["blocked"], "validation": validation}, ensure_ascii=False, indent=2))
+    print(json.dumps({"output": str(output), "blocked": audit["blocked"], "blocker_codes": [item["code"] for item in blockers], "validation": validation}, ensure_ascii=False, indent=2))
     raise SystemExit(2 if audit["blocked"] else 0)
 
 
