@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "contract_id": "R011.W1.MONEY_CREDIT.V2",
+  "package_id": "money_credit",
+  "status": "CONTRACT_FROZEN_GOLD_PENDING",
+  "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
+  "source_whitelist": ["PBOC_STATS"],
+  "primary_key": ["series_id", "reference_period", "vintage_id"],
+  "series": [
+    {"series_id":"CN.MONEY.M1.BALANCE","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_UNIT_GATE"},
+    {"series_id":"CN.MONEY.M2.BALANCE","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_UNIT_GATE"},
+    {"series_id":"CN.LOANS.RMB.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"NOT_IMPLEMENTED"},
+    {"series_id":"CN.LOANS.CORP.MEDIUM_LONG.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"DEFINITION_GATE"},
+    {"series_id":"CN.TSF.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
+    {"series_id":"CN.TSF.STOCK","source":"PBOC_STATS","frequency":"monthly","unit":"trillion_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
+    {"series_id":"CN.TSF.GOV_BOND.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"METHODOLOGY_GATE"}
+  ],
+  "missing_policy": "no generic cumulative differencing; every attachment is a vintage; revisions do not overwrite",
+  "readiness_rule": "two page-plus-attachment gold periods pass units, definitions and methodology-version checks"
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "contract_id": "R011.W1.PRICES.V2",
+  "package_id": "prices",
+  "status": "CONTRACT_FROZEN_GOLD_PENDING",
+  "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
+  "source_whitelist": ["NBS_RELEASE", "NBS_DATA"],
+  "primary_key": ["series_id", "reference_period", "vintage_id"],
+  "series": [
+    {"series_id":"CN.CPI.ALL.YOY","source":"NBS_RELEASE","frequency":"monthly","unit":"percent_yoy","measure_basis":"period_observation","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
+    {"series_id":"CN.CPI.CORE.YOY","source":"NBS_RELEASE","frequency":"monthly","unit":"percent_yoy","measure_basis":"period_observation","pit_grade":"A","license_scope":"internal_research","implementation":"NOT_IMPLEMENTED"},
+    {"series_id":"CN.PPI.ALL.YOY","source":"NBS_RELEASE","frequency":"monthly","unit":"percent_yoy","measure_basis":"period_observation","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
+    {"series_id":"CN.PPI.ALL.MOM","source":"NBS_RELEASE","frequency":"monthly","unit":"percent_mom","measure_basis":"period_observation","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
+    {"series_id":"CN.PPIRM.ALL.YOY","source":"NBS_RELEASE","frequency":"monthly","unit":"percent_yoy","measure_basis":"period_observation","pit_grade":"A","license_scope":"internal_research","implementation":"NOT_IMPLEMENTED"}
+  ],
+  "missing_policy": "no interpolation; methodology/base-year changes require methodology_version",
+  "readiness_rule": "two official releases parse all five fields and methodology version is explicit"
+}

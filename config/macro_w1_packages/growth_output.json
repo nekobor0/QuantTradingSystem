@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "contract_id": "R011.W1.GROWTH_OUTPUT.V2",
+  "package_id": "growth_output",
+  "status": "CONTRACT_FROZEN_GOLD_PENDING",
+  "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
+  "source_whitelist": ["NBS_RELEASE", "NBS_DATA"],
+  "primary_key": ["series_id", "reference_period", "vintage_id"],
+  "series": [
+    {"series_id":"CN.GDP.NOMINAL.YTD","source":"NBS_RELEASE","frequency":"quarterly","unit":"100m_cny","measure_basis":"ytd_cumulative","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_DEFINITION_GATE"},
+    {"series_id":"CN.GDP.REAL.YOY","source":"NBS_RELEASE","frequency":"quarterly","unit":"percent_yoy","measure_basis":"period_observation","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
+    {"series_id":"CN.INDUSTRIAL.VA.YOY","source":"NBS_RELEASE","frequency":"monthly_with_jan_feb_joint","unit":"percent_yoy","measure_basis":"period_observation","pit_grade":"A","license_scope":"internal_research","implementation":"PERIOD_SPAN_GATE"}
+  ],
+  "missing_policy": "GDP YTD is never labeled single-quarter; January industrial value is never synthesized; Jan-Feb uses explicit period_span",
+  "readiness_rule": "two official release cycles pass YTD and Jan-Feb period-span tests"
+}
