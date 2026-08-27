@@ -15,6 +15,7 @@ from quant_trading_system.research.macro_data.adapters import (
 )
 from quant_trading_system.research.macro_data.backfill import _repo_outcome_status, _unexplained_repo_dates
 from quant_trading_system.research.macro_data.contracts import RawSnapshot
+from scripts.data_lake.run_macro_w1_rates_full import count_independent_cfets_paths
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -70,7 +71,8 @@ def test_cfets_repo_uses_explicit_strategy_calendar_across_holiday_gap():
         requested_date="2026-09-30",
         index_type="markInterBankVOList",
         series_id="CN.REPO.DR007",
-        strategy_trading_dates=frozenset({"2026-09-30", "2026-10-09"}),
+        strategy_trading_dates=frozenset({"2026-09-30", "2026-10-01", "2026-10-02", "2026-10-09"}),
+        holidays=frozenset({"2026-10-01", "2026-10-02"}),
     )
     assert frame.iloc[0]["tradable_at"] == "2026-10-09T09:30:00+08:00"
 
@@ -99,6 +101,35 @@ def test_repo_missing_classification_rejects_partial_and_transport_failures():
         "2026-08-12": {"status": "UNEXPLAINED_QUARANTINED"},
     }
     assert _unexplained_repo_dates(list(outcomes), outcomes) == ["2026-08-12"]
+
+
+def test_three_retries_of_one_cfets_endpoint_are_one_mechanism():
+    records = [
+        {
+            "url": "https://www.chinamoney.com.cn/ags/ms/cm-u-dlrp/PrDlyBltn",
+            "method": "POST",
+            "params": {"lang": "cn", "publishedTime": "2200", "searchDate": date, "indexType": index_type},
+        }
+        for date, index_type in (("2026-07-27", "markInterBankVOList"), ("2026-07-28", "markInterBankVOList"), ("2026-07-29", "markVOList"))
+    ]
+    assert count_independent_cfets_paths(records) == 1
+
+
+def test_synthetic_parser_probes_run_without_gold_files():
+    payload = json.dumps({
+        "head": {"rep_code": "200"},
+        "data": {"lastDate": "2026-10-09"},
+        "records": [{"instrmntCd": "DR007", "wghtdAvgRepoRate": "1.50"}],
+    }).encode("utf-8")
+    frame = parse_cfets_repo_json(
+        payload,
+        _inline_snapshot("cfets_repo_daily", payload),
+        requested_date="2026-10-09",
+        index_type="markInterBankVOList",
+        series_id="CN.REPO.DR007",
+        strategy_trading_dates=frozenset({"2026-10-09", "2026-10-12"}),
+    )
+    assert frame.iloc[0]["value"] == 1.5
 
 
 def test_synthetic_post_reform_mlf_omission_and_rate_injection():

@@ -141,9 +141,16 @@ def parse_shibor(
     return pd.DataFrame(records).sort_values(["reference_period", "series_id"]).reset_index(drop=True)
 
 
-def next_strategy_trading_day(reference_date: str, trading_dates: frozenset[str]) -> datetime:
+def next_strategy_trading_day(
+    reference_date: str,
+    trading_dates: frozenset[str],
+    *,
+    holidays: frozenset[str] = frozenset(),
+) -> datetime:
     """Return the next explicitly supplied strategy session at 09:30 Asia/Shanghai."""
-    later_dates = sorted(item for item in trading_dates if item > reference_date)
+    later_dates = sorted(
+        item for item in trading_dates if item > reference_date and item not in holidays
+    )
     if not later_dates:
         raise ValueError(f"strategy calendar has no trading date after {reference_date}")
     return datetime.combine(datetime.strptime(later_dates[0], "%Y-%m-%d").date(), time(9, 30), SHANGHAI)
@@ -161,6 +168,7 @@ def parse_cfets_repo_json(
     index_type: str,
     series_id: str,
     strategy_trading_dates: frozenset[str],
+    holidays: frozenset[str] = frozenset(),
 ) -> pd.DataFrame:
     """Parse exactly one official CFETS R007 or DR007 weighted-average response."""
     expected = {
@@ -198,7 +206,9 @@ def parse_cfets_repo_json(
     release_at = datetime.combine(
         datetime.strptime(requested_date, "%Y-%m-%d").date(), time(23, 59, 59), SHANGHAI
     )
-    next_bar = next_strategy_trading_day(requested_date, strategy_trading_dates)
+    next_bar = next_strategy_trading_day(
+        requested_date, strategy_trading_dates, holidays=holidays
+    )
     return pd.DataFrame([
         _base_record(
             series_id=series_id,
@@ -279,29 +289,80 @@ def parse_pboc_policy_release(
         raise ValueError("PBOC release is not UTF-8 HTML") from exc
     visible = html.unescape(re.sub(r"<[^>]+>", " ", text))
     normalized = " ".join(visible.split())
+    if snapshot.source_id == "pboc_omo_release" and "逆回购" not in normalized:
+        page_timestamp = datetime.fromisoformat(snapshot.retrieved_at)
+        omission = {
+            "series_id": "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
+            "reference_period": page_timestamp.date().isoformat(),
+            "state": "NOT_OMO_ANNOUNCEMENT",
+            "reason": "official OMO index link does not contain a reverse-repo announcement",
+            "source_file": source_file or snapshot.raw_path,
+            "raw_sha256": snapshot.sha256,
+        }
+        return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "NOT_OMO_ANNOUNCEMENT")
     page_timestamp = _publication_timestamp(text)
     is_mlf = snapshot.source_id == "pboc_mlf_release" or "中期借贷便利" in normalized
     is_omo = snapshot.source_id == "pboc_omo_release" or "逆回购" in normalized
+    if snapshot.source_id == "pboc_omo_release":
+        is_mlf = False
+        is_omo = True
+    elif snapshot.source_id == "pboc_mlf_release":
+        is_mlf = True
+        is_omo = False
     if is_mlf == is_omo:
         raise ValueError("PBOC release cannot be classified uniquely as OMO or MLF")
     if is_omo:
         compact = re.sub(r"\s+", "", normalized)
-        zero_operation = bool(re.search(r"7天期?逆回购操作量为零", compact) or re.search(r"7天0亿元0亿元", compact))
-        if "7天" not in compact or ("操作利率" not in compact and not zero_operation):
-            raise ValueError("PBOC OMO release lacks 7-day operation-rate context")
-        value = _policy_rate_from_tables(text)
-        if value is None:
-            if re.search(r"7\s*天期?逆回购操作量为零", normalized) or re.search(r"7\s*天\s*0\s*亿元\s*0\s*亿元", normalized):
+        zero_operation = bool(
+            re.search(r"7天期?逆回购操作量为(?:零|0(?:亿元)?)", compact)
+            or re.search(r"7天0亿元0亿元", compact)
+        )
+        if "7天" not in compact:
+            omission = {
+                "series_id": "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
+                "reference_period": _date_from_text(normalized, fallback=page_timestamp),
+                "state": "RATE_NOT_APPLICABLE_NO_7D_OPERATION",
+                "reason": "official OMO notice does not specify a 7-day reverse-repo operation",
+                "source_file": source_file or snapshot.raw_path,
+                "raw_sha256": snapshot.sha256,
+            }
+            return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "OMO_NO_7D_OPERATION")
+        rate_context = any(marker in compact for marker in ("操作利率", "中标利率"))
+        if not rate_context and not zero_operation:
+            value = _policy_rate_from_tables(text)
+            if value is None:
                 omission = {
                     "series_id": "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
                     "reference_period": _date_from_text(normalized, fallback=page_timestamp),
-                    "state": "RATE_NOT_PUBLISHED_ZERO_OPERATION",
-                    "reason": "official notice reports zero 7-day reverse-repo operation and publishes no rate",
+                    "state": "RATE_NOT_PUBLISHED_NO_EXPLICIT_7D_RATE",
+                    "reason": "official notice does not publish an explicit 7-day operation rate",
                     "source_file": source_file or snapshot.raw_path,
                     "raw_sha256": snapshot.sha256,
                 }
-                return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "OMO_7D_ZERO_OPERATION")
-            raise ValueError("PBOC OMO release lacks an explicit 7-day percentage rate")
+                return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "OMO_7D_NO_EXPLICIT_RATE")
+        value = _policy_rate_from_tables(text)
+        if value is None:
+            zero = re.search(r"7\s*天期?逆回购操作量为零", normalized) or re.search(
+                r"7\s*天\s*0\s*亿元\s*0\s*亿元", normalized
+            )
+            omission = {
+                "series_id": "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
+                "reference_period": _date_from_text(normalized, fallback=page_timestamp),
+                "state": "RATE_NOT_PUBLISHED_ZERO_OPERATION" if zero else "RATE_NOT_PUBLISHED_NO_EXPLICIT_7D_RATE",
+                "reason": (
+                    "official notice reports zero 7-day reverse-repo operation and publishes no rate"
+                    if zero
+                    else "official notice does not publish an explicit 7-day operation rate"
+                ),
+                "source_file": source_file or snapshot.raw_path,
+                "raw_sha256": snapshot.sha256,
+            }
+            return PbocPolicyParseResult(
+                _empty_rates_frame(),
+                (omission,),
+                page_timestamp,
+                "OMO_7D_ZERO_OPERATION" if zero else "OMO_7D_NO_EXPLICIT_RATE",
+            )
         reference_period = _date_from_text(normalized, fallback=page_timestamp)
         tradable_at = max(page_timestamp, datetime.combine(page_timestamp.date(), time(9, 30), SHANGHAI))
         frame = pd.DataFrame([
@@ -324,7 +385,15 @@ def parse_pboc_policy_release(
         return PbocPolicyParseResult(frame, (), page_timestamp, "OMO_7D")
 
     if "1年期" not in normalized:
-        raise ValueError("PBOC MLF release lacks 1-year context")
+        omission = {
+            "series_id": "CN.PBOC.MLF.1Y.RATE",
+            "reference_period": _date_from_text(normalized, fallback=page_timestamp),
+            "state": "RATE_NOT_APPLICABLE_NO_1Y_OPERATION",
+            "reason": "official MLF page does not specify a 1-year operation",
+            "source_file": source_file or snapshot.raw_path,
+            "raw_sha256": snapshot.sha256,
+        }
+        return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "MLF_NO_1Y_OPERATION")
     reference_period = _date_from_text(normalized, marker="中国人民银行将", fallback=page_timestamp)
     explicit_rate = _mlf_explicit_rate(text)
     if reference_period >= "2025-03-01":
@@ -340,7 +409,15 @@ def parse_pboc_policy_release(
         }
         return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "MLF_POST_REFORM")
     if explicit_rate is None:
-        raise ValueError("pre-reform MLF release lacks an explicit unified 1-year rate")
+        omission = {
+            "series_id": "CN.PBOC.MLF.1Y.RATE",
+            "reference_period": reference_period,
+            "state": "RATE_NOT_PUBLISHED_NO_EXPLICIT_1Y_RATE",
+            "reason": "official MLF page specifies a 1-year operation but publishes no unified rate",
+            "source_file": source_file or snapshot.raw_path,
+            "raw_sha256": snapshot.sha256,
+        }
+        return PbocPolicyParseResult(_empty_rates_frame(), (omission,), page_timestamp, "MLF_1Y_NO_EXPLICIT_RATE")
     tradable_at = max(page_timestamp, datetime.combine(page_timestamp.date(), time(9, 30), SHANGHAI))
     frame = pd.DataFrame([
         _base_record(
