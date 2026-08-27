@@ -36,7 +36,10 @@ def main() -> None:
     if args.mode == "shadow" and not package["shadow_allowed"]:
         blockers.append({"code": "SHADOW_NOT_ALLOWED", "detail": "execution manifest gate"})
     if args.mode == "full" and not package["full_history_allowed"]:
-        blockers.append({"code": "FULL_HISTORY_NOT_ALLOWED", "detail": "Sol shadow review has not promoted this package"})
+        blockers.extend(
+            {"code": "FULL_HISTORY_NOT_ALLOWED", "detail": detail}
+            for detail in package["full_blockers"]
+        )
     if args.mode != "gold" and not blockers:
         blockers.append({"code": "PACKAGE_RUNNER_NOT_DISPATCHED", "detail": "use the package-specific shadow implementation"})
     audit = build_audit(

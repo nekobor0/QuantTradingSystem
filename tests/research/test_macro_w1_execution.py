@@ -1,6 +1,11 @@
 from datetime import date
+import json
+from pathlib import Path
 
 from quant_trading_system.research.macro_data.w1_execution import build_audit, expected_periods, validate_audit
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_expected_periods_handle_month_quarter_and_joint_january_february():
@@ -18,3 +23,12 @@ def test_audit_blocker_semantics_are_machine_checked():
     assert validate_audit(audit)["passed"]
     audit["blocked"] = False
     assert not validate_audit(audit)["passed"]
+
+def test_full_history_stays_closed_with_package_specific_blockers():
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    packages = {item["package_id"]: item for item in manifest["packages"]}
+    assert all(not item["full_history_allowed"] for item in packages.values())
+    assert all(len(item["full_blockers"]) >= 2 for item in packages.values())
+    assert {key for key, item in packages.items() if item["shadow_state"] == "SHADOW_PASSED_SOL_REVIEW"} == {
+        "pmi_state", "prices", "growth_output"
+    }

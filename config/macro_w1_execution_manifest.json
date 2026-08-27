@@ -1,14 +1,113 @@
 {
   "schema_version": 1,
   "as_of": "2026-08-27",
-  "state_machine": ["CONTRACT_FROZEN", "GOLD_READY_SHADOW_ONLY", "SHADOW_PASSED_SOL_REVIEW", "FULL_HISTORY_ALLOWED", "FULL_HISTORY_COMPLETE"],
-  "global_forbidden": ["strategy_integration", "research_ready_promotion", "live_trading"],
-  "packages": [
-    {"package_id":"rates_liquidity","order":1,"gold_state":"GOLD_BLOCKED_PARTIAL_4_OF_11","shadow_allowed":false,"full_history_allowed":false,"frequency_groups":["business_daily","monthly_event","event"]},
-    {"package_id":"pmi_state","order":2,"gold_state":"GOLD_READY_SHADOW_ONLY","shadow_allowed":true,"full_history_allowed":false,"frequency_groups":["monthly"]},
-    {"package_id":"prices","order":3,"gold_state":"GOLD_READY_SHADOW_ONLY","shadow_allowed":true,"full_history_allowed":false,"frequency_groups":["monthly"]},
-    {"package_id":"money_credit","order":4,"gold_state":"GOLD_BLOCKED_PARTIAL_5_OF_7","shadow_allowed":false,"full_history_allowed":false,"frequency_groups":["monthly"]},
-    {"package_id":"growth_output","order":5,"gold_state":"GOLD_READY_SHADOW_ONLY","shadow_allowed":true,"full_history_allowed":false,"frequency_groups":["quarterly","monthly_with_jan_feb_joint"]}
+  "state_machine": [
+    "CONTRACT_FROZEN",
+    "GOLD_READY_SHADOW_ONLY",
+    "SHADOW_PASSED_SOL_REVIEW",
+    "FULL_HISTORY_ALLOWED",
+    "FULL_HISTORY_COMPLETE"
   ],
-  "audit_required": ["schema_version", "package_id", "run_mode", "requested_window", "expected_periods", "observed_periods", "sources", "raw_hashes_valid", "duplicate_primary_keys", "value_domain_failures", "unexplained_missing", "structural_omissions", "blocked", "blockers", "research_ready"]
+  "global_forbidden": [
+    "strategy_integration",
+    "research_ready_promotion",
+    "live_trading"
+  ],
+  "packages": [
+    {
+      "package_id": "rates_liquidity",
+      "order": 1,
+      "gold_state": "GOLD_BLOCKED_PARTIAL_4_OF_11",
+      "shadow_allowed": false,
+      "full_history_allowed": false,
+      "frequency_groups": [
+        "business_daily",
+        "monthly_event",
+        "event"
+      ],
+      "shadow_state": "BLOCKED_GOLD_INCOMPLETE",
+      "full_blockers": [
+        "seven series lack two-period Gold",
+        "CFETS historical path remains unverified"
+      ]
+    },
+    {
+      "package_id": "pmi_state",
+      "order": 2,
+      "gold_state": "GOLD_READY_SHADOW_ONLY",
+      "shadow_allowed": true,
+      "full_history_allowed": false,
+      "frequency_groups": [
+        "monthly"
+      ],
+      "shadow_state": "SHADOW_PASSED_SOL_REVIEW",
+      "full_blockers": [
+        "historical official-release discovery for all eight fields is not implemented",
+        "full monthly expected-period audit is not implemented"
+      ]
+    },
+    {
+      "package_id": "prices",
+      "order": 3,
+      "gold_state": "GOLD_READY_SHADOW_ONLY",
+      "shadow_allowed": true,
+      "full_history_allowed": false,
+      "frequency_groups": [
+        "monthly"
+      ],
+      "shadow_state": "SHADOW_PASSED_SOL_REVIEW",
+      "full_blockers": [
+        "historical CPI/PPI paired-release discovery is not implemented",
+        "base-year methodology regime extraction is only Gold-proven"
+      ]
+    },
+    {
+      "package_id": "money_credit",
+      "order": 4,
+      "gold_state": "GOLD_BLOCKED_PARTIAL_5_OF_7",
+      "shadow_allowed": false,
+      "full_history_allowed": false,
+      "frequency_groups": [
+        "monthly"
+      ],
+      "shadow_state": "BLOCKED_GOLD_INCOMPLETE",
+      "full_blockers": [
+        "two monthly loan-flow definitions lack direct official observations",
+        "attachment-vintage history discovery is not implemented"
+      ]
+    },
+    {
+      "package_id": "growth_output",
+      "order": 5,
+      "gold_state": "GOLD_READY_SHADOW_ONLY",
+      "shadow_allowed": true,
+      "full_history_allowed": false,
+      "frequency_groups": [
+        "quarterly",
+        "monthly_with_jan_feb_joint"
+      ],
+      "shadow_state": "SHADOW_PASSED_SOL_REVIEW",
+      "full_blockers": [
+        "historical GDP and industrial-release discovery is not implemented",
+        "January-February joint-period history gate is not implemented"
+      ]
+    }
+  ],
+  "audit_required": [
+    "schema_version",
+    "package_id",
+    "run_mode",
+    "requested_window",
+    "expected_periods",
+    "observed_periods",
+    "sources",
+    "raw_hashes_valid",
+    "duplicate_primary_keys",
+    "value_domain_failures",
+    "unexplained_missing",
+    "structural_omissions",
+    "blocked",
+    "blockers",
+    "research_ready"
+  ]
 }
