@@ -92,3 +92,11 @@
 - Gold：本地 ignored `artifacts/macro_r011/gold_fixtures/w1_rates/2026-08-{24,25}` 两期均通过哈希、字段、时间顺序和值域校验；真实市场数据未纳入 Git。
 - MLF：官方已确认 2025-03 起多重价位中标、不再有统一利率；改革后 `CN.PBOC.MLF.1Y.RATE` 必须零输出并写结构性缺失审计。
 - 索引：`config/macro_w1_rates_contract.json`、`scripts/data_lake/validate_macro_w1_rates_contract.py`、`09_W1_RATES_CONTRACT_GOLD_AND_LUNA_HANDOFF.md`。
+## R011 UPDATE · 2026-08-27 · W1 进入全量前七项任务
+
+- 完成：canonical v2 向后兼容升级；34 条库存对账；五包契约；两期 Gold；统一 runner、expected-period 日历与 audit schema；逐包 shadow；逐包 full-history 入口决议。
+- Gold：PMI 8/8、价格 5/5、增长 3/3 两期通过；利率 4/11、货币信贷 5/7 保持部分覆盖阻塞。
+- Shadow：PMI、价格、增长两期官方页面重解析均通过 Sol gate；无重复键、值域失败或不明缺失，且 `research_ready=false`。
+- Full：五包均生成机器可读阻塞审计；没有启动扩大回填。主要缺口为历史发布页发现、完整期望期审计、CFETS 历史路径，以及两条贷款流量的官方直接观测。
+- 可移植性：专项测试不再使用不可写的 Windows 系统 pytest 临时目录；改写入仓库内 ignored `artifacts`。
+- 索引：`10_W1_PRE_FULL_SEVEN_TASKS_DECISION.md`、`config/macro_w1_gold_registry.json`、`config/macro_w1_execution_manifest.json`、`scripts/data_lake/validate_macro_w1_full_entry.py`。
