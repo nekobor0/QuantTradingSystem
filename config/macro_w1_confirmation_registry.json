@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "status": "DECISIONS_CONFIRMED",
-  "as_of": "2026-08-26",
+  "as_of": "2026-08-27",
   "parent_universe": "development/18-macro-data-layer/R011_macro_data_prioritization/02_china_macro_data_universe_v0.1.yaml",
   "series_count": 34,
   "policies": {
@@ -14,8 +14,22 @@
     "no_full_backfill_before_human_confirmation": false,
     "rates_shadow_only_before_sol_review": true
   },
+  "inventory_summary": {
+    "w1_series_total": 34,
+    "formal_v1_series": ["CN.SHIBOR.ON", "CN.SHIBOR.1W", "CN.SHIBOR.3M", "CN.PMI.MFG.HEADLINE", "CN.PMI.MFG.NEW_ORDERS"],
+    "official_event_history_research_blocked": ["CN.PBOC.OMO.REVERSE_REPO.7D.RATE", "CN.PBOC.MLF.1Y.RATE"],
+    "shadow_blocked": ["CN.REPO.DR007", "CN.REPO.R007"],
+    "existing_crosscheck_only_count": 12,
+    "not_formally_implemented_count": 29,
+    "canonical_v2_available": true,
+    "evidence": {
+      "sample_registry": "config/macro_sample_registry.json",
+      "rates_audit": "artifacts/macro_r011/audits/w1_rates_full_history.json",
+      "pmi_audit": "artifacts/macro_r011/audits/pmi_backfill.json"
+    }
+  },
   "packages": [
-    {"package_id":"rates_liquidity","order":1,"series_count":11,"primary_sources":["CFETS_CHINAMONEY","PBOC_POLICY","CHINABOND"],"sample_state":"SHIBOR_IMPLEMENTED_OTHER_SOURCE_SHAPES_PROBED"},
+    {"package_id":"rates_liquidity","order":1,"series_count":11,"primary_sources":["CFETS_CHINAMONEY","PBOC_POLICY","CHINABOND"],"sample_state":"SHIBOR_IMPLEMENTED_PBOC_EVENT_HISTORY_CAPTURED_CFETS_HISTORY_BLOCKED"},
     {"package_id":"pmi_state","order":2,"series_count":8,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"TWO_IMPLEMENTED_SIX_EXISTING_CROSSCHECK_FIELDS_MAPPED"},
     {"package_id":"prices","order":3,"series_count":5,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_CROSSCHECK_MAPPED"},
     {"package_id":"money_credit","order":4,"series_count":7,"primary_sources":["PBOC_STATS"],"sample_state":"OFFICIAL_RELEASE_AND_ATTACHMENT_SHAPES_PROBED_EXISTING_TOTALS_MAPPED"},
@@ -33,10 +47,10 @@
     {"id":"shibor_on","canonical_id":"CN.SHIBOR.ON","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":"shibor.parquet:on","state":"IMPLEMENTED"},
     {"id":"shibor_1w","canonical_id":"CN.SHIBOR.1W","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":"shibor.parquet:1w","state":"IMPLEMENTED"},
     {"id":"shibor_3m","canonical_id":"CN.SHIBOR.3M","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":"shibor.parquet:3m","state":"IMPLEMENTED"},
-    {"id":"dr007","canonical_id":"CN.REPO.DR007","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"NEEDS_ADAPTER"},
-    {"id":"r007","canonical_id":"CN.REPO.R007","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"NEEDS_ADAPTER"},
-    {"id":"omo_7d_rate","canonical_id":"CN.PBOC.OMO.REVERSE_REPO.7D.RATE","package":"rates_liquidity","source":"PBOC_POLICY","frequency":"event","unit":"percent_per_annum","existing":null,"state":"NEEDS_ADAPTER"},
-    {"id":"mlf_1y_rate","canonical_id":"CN.PBOC.MLF.1Y.RATE","package":"rates_liquidity","source":"PBOC_POLICY","frequency":"event","unit":"percent_per_annum","existing":null,"state":"NEEDS_ADAPTER"},
+    {"id":"dr007","canonical_id":"CN.REPO.DR007","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"SHADOW_BLOCKED_CFETS_HISTORY"},
+    {"id":"r007","canonical_id":"CN.REPO.R007","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"SHADOW_BLOCKED_CFETS_HISTORY"},
+    {"id":"omo_7d_rate","canonical_id":"CN.PBOC.OMO.REVERSE_REPO.7D.RATE","package":"rates_liquidity","source":"PBOC_POLICY","frequency":"event","unit":"percent_per_annum","existing":null,"state":"OFFICIAL_EVENT_HISTORY_CAPTURED_RESEARCH_BLOCKED"},
+    {"id":"mlf_1y_rate","canonical_id":"CN.PBOC.MLF.1Y.RATE","package":"rates_liquidity","source":"PBOC_POLICY","frequency":"event","unit":"percent_per_annum","existing":null,"state":"OFFICIAL_EVENT_HISTORY_CAPTURED_RESEARCH_BLOCKED"},
     {"id":"lpr_1y","canonical_id":"CN.LPR.1Y","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"monthly_event","unit":"percent_per_annum","existing":null,"state":"NEEDS_ADAPTER"},
     {"id":"lpr_5y","canonical_id":"CN.LPR.5Y_PLUS","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"monthly_event","unit":"percent_per_annum","existing":null,"state":"NEEDS_ADAPTER"},
     {"id":"gov_bond_1y","canonical_id":"CN.CHINABOND.GOV.YTM.1Y","package":"rates_liquidity","source":"CHINABOND","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"NEEDS_ADAPTER_LICENSE_GATE"},
