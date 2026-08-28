@@ -45,7 +45,8 @@ def check_full_gate(manifest_path: Path, start: str, end: str) -> list[dict[str,
 
 
 def _write_candidate_audit(output_root: Path, result: dict[str, Any], *, curated: Path, wrote_curated: bool) -> Path:
-    audit_path = output_root / "audits" / "w1_prices_full_candidate.json"
+    audit_name = "w1_prices_full.json" if wrote_curated else "w1_prices_full_candidate.json"
+    audit_path = output_root / "audits" / audit_name
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     source = result["audit"]["sources"][0]
     payload = {

@@ -45,7 +45,8 @@ def check_full_gate(manifest_path: Path = DEFAULT_MANIFEST, start: str = PMI_STA
 
 
 def _write_candidate_audit(output_root: Path, result: dict[str, Any], *, curated: Path, wrote_curated: bool) -> Path:
-    audit_path = output_root / "audits" / "w1_pmi_state_full_candidate.json"
+    audit_name = "w1_pmi_state_full.json" if wrote_curated else "w1_pmi_state_full_candidate.json"
+    audit_path = output_root / "audits" / audit_name
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "audit": result["audit"],

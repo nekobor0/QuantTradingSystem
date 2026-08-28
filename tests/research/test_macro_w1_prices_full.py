@@ -130,6 +130,7 @@ def test_execute_writes_canonical_pit_a_and_is_idempotent(tmp_path: Path, monkey
     assert first["curated_write"]["performed"] is True
     assert first["research_ready"] is False
     assert first["audit"]["research_ready"] is False
+    assert Path(first["output"]).name == "w1_prices_full.json"
     frame = pd.read_parquet(curated)
     assert len(frame) == 335
     assert set(frame["pit_grade"]) == {"A"}

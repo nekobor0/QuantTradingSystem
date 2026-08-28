@@ -58,6 +58,17 @@ def test_audit_only_writes_candidate_audit_without_curated(tmp_path: Path) -> No
     assert result["curated_write"]["performed"] is False
     assert not (output_root / "curated" / "w1_pmi_state_official_release_vintages.parquet").exists()
     assert Path(result["output"]).exists()
+    assert Path(result["output"]).name == "w1_pmi_state_full_candidate.json"
+
+
+def test_execute_writes_formal_full_audit_after_curated_succeeds(tmp_path: Path) -> None:
+    output_root = _archive(tmp_path)
+    manifest = _pmi_gate_manifest(tmp_path / "allowed.json")
+    result = run_full(output_root, "2018-01", "2018-02", "execute", manifest_path=manifest)
+    assert result["blocked"] is False
+    assert result["curated_write"]["performed"] is True
+    assert Path(result["output"]).name == "w1_pmi_state_full.json"
+    assert Path(result["output"]).exists()
 
 
 def test_execute_is_rejected_by_closed_gate_and_curated_is_unchanged(tmp_path: Path) -> None:
