@@ -20,6 +20,7 @@ from scripts.data_lake.run_macro_w1_pmi_state_full import run_full as run_pmi_fu
 from scripts.data_lake.run_macro_w1_prices_enablement import run_shadow as run_prices_shadow
 from scripts.data_lake.run_macro_w1_prices_full import check_full_gate as check_prices_full_gate
 from scripts.data_lake.run_macro_w1_prices_full import run_full as run_prices_full
+from scripts.data_lake.run_macro_w1_growth_output_enablement import run_bounded_candidate
 
 
 def main() -> None:
@@ -28,6 +29,7 @@ def main() -> None:
     parser.add_argument("--mode", choices=("gold", "shadow", "full"), required=True)
     parser.add_argument("--start", required=True)
     parser.add_argument("--end", required=True)
+    parser.add_argument("--discovery", choices=("combined", "index", "direct-search"), default="combined")
     parser.add_argument("--output-root", type=Path, default=ROOT / "artifacts" / "macro_r011")
     args = parser.parse_args()
 
@@ -70,6 +72,14 @@ def main() -> None:
         result = run_prices_full(args.output_root, args.start, args.end, "execute")
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
         raise SystemExit(2 if result.get("blocked") else 0)
+    if args.package == "growth_output" and args.mode == "shadow" and not blockers:
+        result = run_bounded_candidate(args.output_root, args.start, args.end, discovery=args.discovery)
+        print(json.dumps({
+            "output": str(args.output_root / "audits" / "w1_growth_output_bounded_candidate.json"),
+            "candidate": result["candidate"], "blocked": result["audit"]["blocked"],
+            "validation": result["validation"], "research_ready": False,
+        }, ensure_ascii=False, indent=2, default=str))
+        raise SystemExit(0 if result["validation"]["passed"] and not result["audit"]["blocked"] else 1)
     if args.mode != "gold" and not blockers:
         blockers.append({"code": "PACKAGE_RUNNER_NOT_DISPATCHED", "detail": "use the package-specific shadow implementation"})
     audit = build_audit(
