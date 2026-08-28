@@ -240,17 +240,32 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
         "two_gold_blocked": sum(isinstance(item, dict) and item.get("shadow_state") == "BLOCKED_GOLD_INCOMPLETE" for item in packages) == 2 if isinstance(packages, list) else False,
     }
     audits: dict[str, Any] = {}
+    execution_pending_packages: list[str] = []
+    full_history_complete_packages: list[str] = []
     if audit_root is not None:
         for package in packages if isinstance(packages, list) else []:
             package_id = package["package_id"]
             audit = _load(audit_root / f"w1_{package_id}_full.json")["audit"]
             details = {item["detail"] for item in audit["blockers"] if item["code"] == "FULL_HISTORY_NOT_ALLOWED"}
+            blocker_codes = {item["code"] for item in audit["blockers"]}
             package_allowed = package.get("full_history_allowed") is True
+            execution_pending = package_allowed and audit["blocked"] and blocker_codes == {"FULL_HISTORY_NOT_ALLOWED"}
+            execution_complete = package_allowed and not audit["blocked"]
+            if execution_pending:
+                execution_pending_packages.append(package_id)
+            if execution_complete:
+                full_history_complete_packages.append(package_id)
             audits[package_id] = {
                 "schema_valid": validate_audit(audit)["passed"],
                 "blocked": audit["blocked"],
                 "research_ready": audit["research_ready"],
-                "specific_blockers_match": (details == set(package["full_blockers"])) if not package_allowed else not audit["blocked"],
+                "execution_pending": execution_pending,
+                "execution_complete": execution_complete,
+                "specific_blockers_match": (
+                    details == set(package["full_blockers"])
+                    if not package_allowed
+                    else execution_pending or execution_complete
+                ),
             }
         checks["all_local_full_gate_audits_valid"] = all(
             item["schema_valid"] and (item["blocked"] or not item["research_ready"]) and item["specific_blockers_match"]
@@ -271,6 +286,8 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
         "ready_packages": ready_packages,
         "blocked_packages": blocked_packages,
         "invalid_packages": invalid_packages,
+        "execution_pending_packages": execution_pending_packages,
+        "full_history_complete_packages": full_history_complete_packages,
         "package_errors": package_errors,
         "decision": decision,
         "checks": checks,

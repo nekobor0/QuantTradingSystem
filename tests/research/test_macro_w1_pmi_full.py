@@ -66,7 +66,8 @@ def test_execute_is_rejected_by_closed_gate_and_curated_is_unchanged(tmp_path: P
     curated.parent.mkdir(parents=True)
     curated.write_bytes(b"sentinel")
     before = hashlib.sha256(curated.read_bytes()).hexdigest()
-    result = run_full(output_root, "2018-01", "2018-02", "execute")
+    manifest = _pmi_gate_manifest(tmp_path / "closed.json", allowed=False, blockers=["review required"])
+    result = run_full(output_root, "2018-01", "2018-02", "execute", manifest_path=manifest)
     assert result["blocked"] is True
     assert all(item["code"] == "FULL_HISTORY_NOT_ALLOWED" for item in result["blockers"])
     assert result["curated_sha256_before"] == before
@@ -82,8 +83,19 @@ def test_duplicate_vintage_primary_key_is_rejected(tmp_path: Path) -> None:
     assert "unique_series_period_vintage" in validation["failures"]
 
 
-def _pmi_gate_manifest(path: Path, *, window: object = "exact", scope: str = "official_release_vintage") -> Path:
-    package: dict[str, object] = {"package_id": "pmi_state", "full_history_allowed": True, "full_blockers": []}
+def _pmi_gate_manifest(
+    path: Path,
+    *,
+    allowed: bool = True,
+    blockers: list[str] | None = None,
+    window: object = "exact",
+    scope: str = "official_release_vintage",
+) -> Path:
+    package: dict[str, object] = {
+        "package_id": "pmi_state",
+        "full_history_allowed": allowed,
+        "full_blockers": blockers or [],
+    }
     if window != "missing":
         package["full_window"] = window if window != "exact" else {"start": "2009-06", "end": "2026-07", "scope": scope}
     path.write_text(json.dumps({"schema_version": 2, "gate_version": 2, "packages": [package]}), encoding="utf-8")
@@ -121,8 +133,5 @@ def test_pmi_gate_v2_malformed_manifest_is_a_stable_rejection(tmp_path: Path, pa
     assert result and result[0]["code"] == code
 
 
-def test_pmi_real_gate_remains_closed(tmp_path: Path) -> None:
-    result = run_full(tmp_path / "lake", "2009-06", "2026-07", "execute")
-    assert result["blocked"] is True
-    assert result["blockers"][0]["code"] == "FULL_HISTORY_NOT_ALLOWED"
-    assert not (tmp_path / "lake" / "curated" / "w1_pmi_state_official_release_vintages.parquet").exists()
+def test_pmi_real_gate_is_open_for_the_approved_window() -> None:
+    assert check_full_gate() == []

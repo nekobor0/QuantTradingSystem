@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "gate_version": 2,
-  "as_of": "2026-08-27",
+  "as_of": "2026-08-28",
   "state_machine": [
     "CONTRACT_FROZEN",
     "GOLD_READY_SHADOW_ONLY",
@@ -37,7 +37,7 @@
       "order": 2,
       "gold_state": "GOLD_READY_SHADOW_ONLY",
       "shadow_allowed": true,
-      "full_history_allowed": false,
+      "full_history_allowed": true,
       "frequency_groups": [
         "monthly"
       ],
@@ -47,17 +47,14 @@
         "end": "2026-07",
         "scope": "official_release_vintage"
       },
-      "full_blockers": [
-        "historical official-release discovery for all eight fields is not implemented",
-        "full monthly expected-period audit is not implemented"
-      ]
+      "full_blockers": []
     },
     {
       "package_id": "prices",
       "order": 3,
       "gold_state": "GOLD_READY_SHADOW_ONLY",
       "shadow_allowed": true,
-      "full_history_allowed": false,
+      "full_history_allowed": true,
       "frequency_groups": [
         "monthly"
       ],
@@ -67,10 +64,7 @@
         "end": "2026-07",
         "scope": "pit_a_official_release"
       },
-      "full_blockers": [
-        "historical CPI/PPI paired-release discovery is not implemented",
-        "base-year methodology regime extraction is only Gold-proven"
-      ]
+      "full_blockers": []
     },
     {
       "package_id": "money_credit",

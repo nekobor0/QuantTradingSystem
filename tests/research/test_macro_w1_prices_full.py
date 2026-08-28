@@ -10,6 +10,7 @@ import pytest
 from quant_trading_system.research.macro_data import w1_prices_history as prices
 from scripts.data_lake.run_macro_w1_prices_full import (
     CURATED_NAME,
+    DEFAULT_MANIFEST,
     PIT_A_END,
     PIT_A_START,
     REQUIRED_SCOPE,
@@ -183,10 +184,15 @@ def test_execute_rejection_preserves_existing_curated(tmp_path: Path) -> None:
     curated.parent.mkdir(parents=True)
     curated.write_bytes(b"sentinel")
     before = hashlib.sha256(curated.read_bytes()).hexdigest()
-    result = run_full(output_root, PIT_A_START, PIT_A_END, "execute")
+    manifest = _manifest(tmp_path / "closed.json", allowed=False)
+    result = run_full(output_root, PIT_A_START, PIT_A_END, "execute", manifest_path=manifest)
     assert result["blocked"] is True
     assert result["blockers"][0]["code"] == "FULL_HISTORY_NOT_ALLOWED"
     assert hashlib.sha256(curated.read_bytes()).hexdigest() == before
+
+
+def test_prices_real_gate_is_open_for_the_approved_pit_a_window() -> None:
+    assert check_full_gate(DEFAULT_MANIFEST, PIT_A_START, PIT_A_END) == []
 
 
 def test_narrow_window_reverse_validation_then_restore(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
