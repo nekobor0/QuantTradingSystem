@@ -15,8 +15,11 @@ sys.path.insert(0, str(ROOT / "src"))
 from quant_trading_system.research.macro_data.w1_execution import build_audit, validate_audit
 from scripts.data_lake.validate_macro_w1_gold import validate_registry
 from scripts.data_lake.run_macro_w1_pmi_state_enablement import run_shadow as run_pmi_shadow
+from scripts.data_lake.run_macro_w1_pmi_state_full import check_full_gate as check_pmi_full_gate
 from scripts.data_lake.run_macro_w1_pmi_state_full import run_full as run_pmi_full
 from scripts.data_lake.run_macro_w1_prices_enablement import run_shadow as run_prices_shadow
+from scripts.data_lake.run_macro_w1_prices_full import check_full_gate as check_prices_full_gate
+from scripts.data_lake.run_macro_w1_prices_full import run_full as run_prices_full
 
 
 def main() -> None:
@@ -43,6 +46,10 @@ def main() -> None:
             {"code": "FULL_HISTORY_NOT_ALLOWED", "detail": detail}
             for detail in package["full_blockers"]
         )
+    if args.package == "prices" and args.mode == "full" and not blockers:
+        blockers.extend(check_prices_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
+    if args.package == "pmi_state" and args.mode == "full" and not blockers:
+        blockers.extend(check_pmi_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
     if args.package == "pmi_state" and args.mode == "full" and not blockers:
         result = run_pmi_full(args.output_root, args.start, args.end, "execute")
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
@@ -59,6 +66,10 @@ def main() -> None:
         output = args.output_root / "audits" / "w1_prices_shadow.json"
         print(json.dumps({"output": str(output), "blocked": result["audit"]["blocked"], "validation": result["validation"], "research_ready": False}, ensure_ascii=False, indent=2, default=str))
         raise SystemExit(0 if result["validation"]["passed"] and not result["audit"]["blocked"] else 1)
+    if args.package == "prices" and args.mode == "full" and not blockers:
+        result = run_prices_full(args.output_root, args.start, args.end, "execute")
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        raise SystemExit(2 if result.get("blocked") else 0)
     if args.mode != "gold" and not blockers:
         blockers.append({"code": "PACKAGE_RUNNER_NOT_DISPATCHED", "detail": "use the package-specific shadow implementation"})
     audit = build_audit(

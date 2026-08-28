@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "gate_version": 2,
   "as_of": "2026-08-27",
   "state_machine": [
     "CONTRACT_FROZEN",
@@ -41,6 +42,11 @@
         "monthly"
       ],
       "shadow_state": "SHADOW_PASSED_SOL_REVIEW",
+      "full_window": {
+        "start": "2009-06",
+        "end": "2026-07",
+        "scope": "official_release_vintage"
+      },
       "full_blockers": [
         "historical official-release discovery for all eight fields is not implemented",
         "full monthly expected-period audit is not implemented"
@@ -56,6 +62,11 @@
         "monthly"
       ],
       "shadow_state": "SHADOW_PASSED_SOL_REVIEW",
+      "full_window": {
+        "start": "2021-01",
+        "end": "2026-07",
+        "scope": "pit_a_official_release"
+      },
       "full_blockers": [
         "historical CPI/PPI paired-release discovery is not implemented",
         "base-year methodology regime extraction is only Gold-proven"

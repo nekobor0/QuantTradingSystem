@@ -16,9 +16,14 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from quant_trading_system.research.macro_data.contracts import write_canonical_v2_snapshot  # noqa: E402
 from quant_trading_system.research.macro_data.w1_pmi_history import run_full_candidate  # noqa: E402
+from scripts.data_lake.validate_macro_w1_full_entry import check_full_gate_v2  # noqa: E402
 
 
 CURATED_NAME = "w1_pmi_state_official_release_vintages.parquet"
+DEFAULT_MANIFEST = ROOT / "config" / "macro_w1_execution_manifest.json"
+PMI_START = "2009-06"
+PMI_END = "2026-07"
+PMI_SCOPE = "official_release_vintage"
 
 
 def _sha256(path: Path) -> str | None:
@@ -27,10 +32,16 @@ def _sha256(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _full_gate() -> tuple[bool, list[str]]:
-    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
-    package = next(item for item in manifest["packages"] if item["package_id"] == "pmi_state")
-    return bool(package["full_history_allowed"]), [str(item) for item in package["full_blockers"]]
+def check_full_gate(manifest_path: Path = DEFAULT_MANIFEST, start: str = PMI_START, end: str = PMI_END) -> list[dict[str, str]]:
+    return check_full_gate_v2(
+        manifest_path,
+        "pmi_state",
+        PMI_START,
+        PMI_END,
+        PMI_SCOPE,
+        start,
+        end,
+    )
 
 
 def _write_candidate_audit(output_root: Path, result: dict[str, Any], *, curated: Path, wrote_curated: bool) -> Path:
@@ -51,15 +62,15 @@ def _write_candidate_audit(output_root: Path, result: dict[str, Any], *, curated
     return audit_path
 
 
-def run_full(output_root: Path, start: str, end: str, mode: str) -> dict[str, Any]:
+def run_full(output_root: Path, start: str, end: str, mode: str, *, manifest_path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     curated = output_root / "curated" / CURATED_NAME
     before = _sha256(curated)
     if mode == "execute":
-        allowed, blockers = _full_gate()
-        if not allowed:
+        blockers = check_full_gate(manifest_path, start, end)
+        if blockers:
             return {
                 "blocked": True,
-                "blockers": [{"code": "FULL_HISTORY_NOT_ALLOWED", "detail": detail} for detail in blockers],
+                "blockers": blockers,
                 "curated_path": str(curated),
                 "curated_exists": curated.exists(),
                 "curated_sha256_before": before,
