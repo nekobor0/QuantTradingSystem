@@ -16,6 +16,7 @@ from quant_trading_system.research.macro_data.w1_execution import build_audit, v
 from scripts.data_lake.validate_macro_w1_gold import validate_registry
 from scripts.data_lake.run_macro_w1_pmi_state_enablement import run_shadow as run_pmi_shadow
 from scripts.data_lake.run_macro_w1_pmi_state_full import run_full as run_pmi_full
+from scripts.data_lake.run_macro_w1_prices_enablement import run_shadow as run_prices_shadow
 
 
 def main() -> None:
@@ -53,6 +54,11 @@ def main() -> None:
         output.write_text(json.dumps({"audit": result["audit"], "validation": result["validation"], "gold": gold}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps({"output": str(output), "blocked": result["audit"]["blocked"], "validation": result["validation"]}, ensure_ascii=False, indent=2))
         raise SystemExit(0 if result["validation"]["passed"] else 1)
+    if args.package == "prices" and args.mode == "shadow" and not blockers:
+        result = run_prices_shadow(args.output_root, args.start, args.end)
+        output = args.output_root / "audits" / "w1_prices_shadow.json"
+        print(json.dumps({"output": str(output), "blocked": result["audit"]["blocked"], "validation": result["validation"], "research_ready": False}, ensure_ascii=False, indent=2, default=str))
+        raise SystemExit(0 if result["validation"]["passed"] and not result["audit"]["blocked"] else 1)
     if args.mode != "gold" and not blockers:
         blockers.append({"code": "PACKAGE_RUNNER_NOT_DISPATCHED", "detail": "use the package-specific shadow implementation"})
     audit = build_audit(
