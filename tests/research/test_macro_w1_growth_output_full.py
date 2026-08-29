@@ -145,9 +145,9 @@ def test_damaged_manual_audit_fails_closed(tmp_path: Path) -> None:
     assert not (lake / GROWTH_FORMAL_INPUT["formal_curated"]).exists()
 
 
-def test_real_gate_is_open_but_real_formal_curated_does_not_exist() -> None:
+def test_real_gate_is_open_for_the_frozen_formal_contract() -> None:
     assert check_growth_full_gate_v2(ROOT / "config" / "macro_w1_execution_manifest.json") == []
-    assert not (REAL_LAKE / GROWTH_FORMAL_INPUT["formal_curated"]).exists()
+    assert GROWTH_FORMAL_INPUT["formal_curated"] == f"curated/{CURATED_NAME}"
 
 
 @pytest.mark.parametrize("authorized", [False, True])

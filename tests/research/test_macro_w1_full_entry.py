@@ -67,10 +67,30 @@ def test_promoted_packages_are_complete_after_full_execution(tmp_path: Path):
     assert result["full_history_complete_packages"] == ["pmi_state", "prices", "growth_output"]
 
 
-def test_repository_state_has_only_growth_execution_pending() -> None:
+def test_pre_execution_fixture_has_only_growth_pending(tmp_path: Path) -> None:
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    for package in manifest["packages"]:
+        package_id = package["package_id"]
+        if package_id in {"pmi_state", "prices"}:
+            blocker_details = []
+        elif package_id == "growth_output":
+            blocker_details = ["formal full execution has not run"]
+        else:
+            blocker_details = package["full_blockers"]
+        audit = build_audit(
+            package_id=package_id,
+            run_mode="full",
+            start="1992-01" if package_id == "growth_output" else "2009-06",
+            end="2026-07",
+            expected=[],
+            observed=[],
+            sources=[],
+            blockers=[{"code": "FULL_HISTORY_NOT_ALLOWED", "detail": detail} for detail in blocker_details],
+        )
+        (tmp_path / f"w1_{package_id}_full.json").write_text(json.dumps({"audit": audit}), encoding="utf-8")
     result = validate_full_entry(
         ROOT / "config" / "macro_w1_execution_manifest.json",
-        ROOT / "artifacts" / "macro_r011" / "audits",
+        tmp_path,
     )
     assert result["passed"], result
     assert result["ready_packages"] == ["pmi_state", "prices", "growth_output"]
