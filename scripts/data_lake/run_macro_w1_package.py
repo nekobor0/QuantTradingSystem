@@ -21,6 +21,8 @@ from scripts.data_lake.run_macro_w1_prices_enablement import run_shadow as run_p
 from scripts.data_lake.run_macro_w1_prices_full import check_full_gate as check_prices_full_gate
 from scripts.data_lake.run_macro_w1_prices_full import run_full as run_prices_full
 from scripts.data_lake.run_macro_w1_growth_output_enablement import run_bounded_candidate
+from scripts.data_lake.run_macro_w1_growth_output_full import check_full_gate as check_growth_full_gate
+from scripts.data_lake.run_macro_w1_growth_output_full import run_full as run_growth_full
 
 
 def main() -> None:
@@ -31,6 +33,7 @@ def main() -> None:
     parser.add_argument("--end", required=True)
     parser.add_argument("--discovery", choices=("combined", "index", "direct-search"), default="combined")
     parser.add_argument("--output-root", type=Path, default=ROOT / "artifacts" / "macro_r011")
+    parser.add_argument("--authorize-formal-write", action="store_true")
     args = parser.parse_args()
 
     manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
@@ -52,6 +55,8 @@ def main() -> None:
         blockers.extend(check_prices_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
     if args.package == "pmi_state" and args.mode == "full" and not blockers:
         blockers.extend(check_pmi_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
+    if args.package == "growth_output" and args.mode == "full" and not blockers:
+        blockers.extend(check_growth_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
     if args.package == "pmi_state" and args.mode == "full" and not blockers:
         result = run_pmi_full(args.output_root, args.start, args.end, "execute")
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
@@ -70,6 +75,16 @@ def main() -> None:
         raise SystemExit(0 if result["validation"]["passed"] and not result["audit"]["blocked"] else 1)
     if args.package == "prices" and args.mode == "full" and not blockers:
         result = run_prices_full(args.output_root, args.start, args.end, "execute")
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        raise SystemExit(2 if result.get("blocked") else 0)
+    if args.package == "growth_output" and args.mode == "full" and not blockers:
+        result = run_growth_full(
+            args.output_root,
+            args.start,
+            args.end,
+            "execute",
+            authorize_execute=args.authorize_formal_write,
+        )
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
         raise SystemExit(2 if result.get("blocked") else 0)
     if args.package == "growth_output" and args.mode == "shadow" and not blockers:

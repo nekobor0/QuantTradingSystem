@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "gate_version": 2,
-  "as_of": "2026-08-28",
+  "as_of": "2026-08-29",
   "state_machine": [
     "CONTRACT_FROZEN",
     "GOLD_READY_SHADOW_ONLY",
@@ -86,16 +86,52 @@
       "order": 5,
       "gold_state": "GOLD_READY_SHADOW_ONLY",
       "shadow_allowed": true,
-      "full_history_allowed": false,
+      "full_history_allowed": true,
       "frequency_groups": [
         "quarterly",
         "monthly_with_jan_feb_joint"
       ],
       "shadow_state": "SHADOW_PASSED_SOL_REVIEW",
-      "full_blockers": [
-        "historical GDP and industrial-release discovery is not implemented",
-        "January-February joint-period history gate is not implemented"
-      ]
+      "full_window": {
+        "start": "1992-01",
+        "end": "2026-07",
+        "scope": "pit_a_release_plus_pit_c_frozen_manual_official_exports",
+        "series_windows": {
+          "CN.GDP.NOMINAL.YTD": {
+            "start": "1992-Q1",
+            "end": "2026-Q2",
+            "expected_rows": 138
+          },
+          "CN.GDP.REAL.YOY": {
+            "start": "1993-Q1",
+            "end": "2026-Q2",
+            "expected_rows": 134,
+            "source_scope_exclusions": [
+              "1992-Q1",
+              "1992-Q2",
+              "1992-Q3",
+              "1992-Q4"
+            ]
+          },
+          "CN.INDUSTRIAL.VA.YOY": {
+            "start": "1998-07",
+            "end": "2026-07",
+            "expected_rows": 309,
+            "january_rows": 0,
+            "february_scope": "independent_through_2012_then_january_february_joint_from_2013"
+          }
+        }
+      },
+      "formal_input": {
+        "candidate": "shadow/w1_growth_output_manual_exports_full_candidate.parquet",
+        "candidate_sha256": "C03769F9C8C4A7E7C0F202AB1D0FA1ACC1AA00F6CF6049D3145F716B23F3C013",
+        "manual_audit": "audits/w1_growth_output_manual_exports_full.json",
+        "manual_audit_sha256": "A9232C73F2B7262CC03463725F9F7B78D708B2050AF936F6511E7033817E068B",
+        "source_map": "state/w1_growth_output_luna_full_candidate/w1_growth_output_full_range_source_map.json",
+        "source_map_sha256": "2ECB852AFD20A8510FC392F237B4D0E648D7ABE315B1A64553A426E1C56BC671",
+        "formal_curated": "curated/w1_growth_output_official_mixed_pit.parquet"
+      },
+      "full_blockers": []
     }
   ],
   "audit_required": [

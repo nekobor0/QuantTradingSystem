@@ -25,19 +25,19 @@ def test_audit_blocker_semantics_are_machine_checked():
     audit["blocked"] = False
     assert not validate_audit(audit)["passed"]
 
-def test_pmi_and_prices_full_history_are_allowed_with_other_packages_blocked():
+def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocked():
     manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
     packages = {item["package_id"]: item for item in manifest["packages"]}
-    assert {key for key, item in packages.items() if item["full_history_allowed"]} == {"pmi_state", "prices"}
-    assert all(packages[key]["full_blockers"] == [] for key in ("pmi_state", "prices"))
-    assert all(len(packages[key]["full_blockers"]) >= 2 for key in ("rates_liquidity", "money_credit", "growth_output"))
+    assert {key for key, item in packages.items() if item["full_history_allowed"]} == {"pmi_state", "prices", "growth_output"}
+    assert all(packages[key]["full_blockers"] == [] for key in ("pmi_state", "prices", "growth_output"))
+    assert all(len(packages[key]["full_blockers"]) >= 2 for key in ("rates_liquidity", "money_credit"))
     assert {key for key, item in packages.items() if item["shadow_state"] == "SHADOW_PASSED_SOL_REVIEW"} == {
         "pmi_state", "prices", "growth_output"
     }
     result = validate_full_entry(ROOT / "config" / "macro_w1_execution_manifest.json")
     assert result["passed"] is True
-    assert result["ready_packages"] == ["pmi_state", "prices"]
-    assert result["blocked_packages"] == ["rates_liquidity", "money_credit", "growth_output"]
+    assert result["ready_packages"] == ["pmi_state", "prices", "growth_output"]
+    assert result["blocked_packages"] == ["rates_liquidity", "money_credit"]
     assert result["invalid_packages"] == []
     assert result["all_packages_ready"] is False
 
@@ -52,8 +52,8 @@ def test_full_entry_accepts_one_ready_package_when_prices_is_temporarily_blocked
     path.write_text(json.dumps(manifest), encoding="utf-8")
     result = validate_full_entry(path)
     assert result["passed"] is True
-    assert result["ready_packages"] == ["pmi_state"]
-    assert result["blocked_packages"] == ["rates_liquidity", "prices", "money_credit", "growth_output"]
+    assert result["ready_packages"] == ["pmi_state", "growth_output"]
+    assert result["blocked_packages"] == ["rates_liquidity", "prices", "money_credit"]
     assert result["invalid_packages"] == []
     assert result["all_packages_ready"] is False
     assert result["full_entry_ready"] is False

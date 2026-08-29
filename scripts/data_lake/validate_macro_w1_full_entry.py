@@ -16,6 +16,34 @@ from quant_trading_system.research.macro_data.w1_execution import validate_audit
 
 
 EXPECTED_PACKAGES = ["rates_liquidity", "pmi_state", "prices", "money_credit", "growth_output"]
+GROWTH_START = "1992-01"
+GROWTH_END = "2026-07"
+GROWTH_SCOPE = "pit_a_release_plus_pit_c_frozen_manual_official_exports"
+GROWTH_SERIES_WINDOWS = {
+    "CN.GDP.NOMINAL.YTD": {"start": "1992-Q1", "end": "2026-Q2", "expected_rows": 138},
+    "CN.GDP.REAL.YOY": {
+        "start": "1993-Q1",
+        "end": "2026-Q2",
+        "expected_rows": 134,
+        "source_scope_exclusions": ["1992-Q1", "1992-Q2", "1992-Q3", "1992-Q4"],
+    },
+    "CN.INDUSTRIAL.VA.YOY": {
+        "start": "1998-07",
+        "end": "2026-07",
+        "expected_rows": 309,
+        "january_rows": 0,
+        "february_scope": "independent_through_2012_then_january_february_joint_from_2013",
+    },
+}
+GROWTH_FORMAL_INPUT = {
+    "candidate": "shadow/w1_growth_output_manual_exports_full_candidate.parquet",
+    "candidate_sha256": "C03769F9C8C4A7E7C0F202AB1D0FA1ACC1AA00F6CF6049D3145F716B23F3C013",
+    "manual_audit": "audits/w1_growth_output_manual_exports_full.json",
+    "manual_audit_sha256": "A9232C73F2B7262CC03463725F9F7B78D708B2050AF936F6511E7033817E068B",
+    "source_map": "state/w1_growth_output_luna_full_candidate/w1_growth_output_full_range_source_map.json",
+    "source_map_sha256": "2ECB852AFD20A8510FC392F237B4D0E648D7ABE315B1A64553A426E1C56BC671",
+    "formal_curated": "curated/w1_growth_output_official_mixed_pit.parquet",
+}
 
 
 def _blocker(code: str, detail: str) -> dict[str, str]:
@@ -135,6 +163,52 @@ def check_full_gate_v2(
     return []
 
 
+def _growth_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
+    errors = _package_gate_errors(
+        package,
+        required_start=GROWTH_START,
+        required_end=GROWTH_END,
+        required_scope=GROWTH_SCOPE,
+    )
+    window = package.get("full_window")
+    if isinstance(window, dict) and window.get("series_windows") != GROWTH_SERIES_WINDOWS:
+        errors.append(_blocker("FULL_SERIES_WINDOWS_MISMATCH", "growth_output series_windows must match the frozen 581-row calendar"))
+    formal_input = package.get("formal_input")
+    if not isinstance(formal_input, dict):
+        errors.append(_blocker("FORMAL_INPUT_MISSING", "growth_output formal_input must be an object"))
+    elif formal_input != GROWTH_FORMAL_INPUT:
+        code = "FORMAL_TARGET_MISMATCH" if formal_input.get("formal_curated") != GROWTH_FORMAL_INPUT["formal_curated"] else "FORMAL_INPUT_MISMATCH"
+        errors.append(_blocker(code, "growth_output formal evidence paths, hashes, and target must match the frozen contract"))
+    return errors
+
+
+def check_growth_full_gate_v2(
+    manifest_path: Path,
+    start: str = GROWTH_START,
+    end: str = GROWTH_END,
+) -> list[dict[str, str]]:
+    errors = check_full_gate_v2(
+        manifest_path,
+        "growth_output",
+        GROWTH_START,
+        GROWTH_END,
+        GROWTH_SCOPE,
+        start,
+        end,
+    )
+    if errors:
+        return errors
+    if start != GROWTH_START or end != GROWTH_END:
+        return [_blocker("FULL_WINDOW_OUT_OF_RANGE", f"growth_output formal execution requires exact window {GROWTH_START}..{GROWTH_END}")]
+    manifest, read_errors = _read_gate_manifest(manifest_path)
+    if manifest is None:
+        return read_errors
+    package, package_errors = _find_package(manifest, "growth_output")
+    if package is None:
+        return package_errors
+    return _growth_gate_errors(package)
+
+
 def _load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -192,6 +266,8 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
                 errors.extend(_package_gate_errors(package, required_start="2009-06", required_end="2026-07", required_scope="official_release_vintage"))
             elif package_id == "prices":
                 errors.extend(_package_gate_errors(package, required_start="2021-01", required_end="2026-07", required_scope="pit_a_official_release"))
+            elif package_id == "growth_output":
+                errors.extend(_growth_gate_errors(package))
             else:
                 window = package.get("full_window")
                 if not isinstance(window, dict):

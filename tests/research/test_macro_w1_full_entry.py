@@ -8,13 +8,13 @@ from quant_trading_system.research.macro_data.w1_execution import build_audit
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_w1_full_entry_has_pmi_prices_ready_with_other_packages_blocked():
+def test_w1_full_entry_has_growth_pending_with_rates_and_money_blocked():
     result = validate_full_entry(ROOT / "config" / "macro_w1_execution_manifest.json")
     assert result["passed"], result
     assert result["full_entry_ready"] is False
     assert result["decision"] == "MIXED_PACKAGE_READINESS"
-    assert result["ready_packages"] == ["pmi_state", "prices"]
-    assert result["blocked_packages"] == ["rates_liquidity", "money_credit", "growth_output"]
+    assert result["ready_packages"] == ["pmi_state", "prices", "growth_output"]
+    assert result["blocked_packages"] == ["rates_liquidity", "money_credit"]
 
 
 def _write_full_audit_fixtures(audit_root: Path, *, promoted_complete: bool) -> None:
@@ -52,7 +52,7 @@ def test_promoted_packages_are_pending_before_full_execution(tmp_path: Path):
         tmp_path,
     )
     assert result["passed"], result
-    assert result["execution_pending_packages"] == ["pmi_state", "prices"]
+    assert result["execution_pending_packages"] == ["pmi_state", "prices", "growth_output"]
     assert result["full_history_complete_packages"] == []
 
 
@@ -64,4 +64,18 @@ def test_promoted_packages_are_complete_after_full_execution(tmp_path: Path):
     )
     assert result["passed"], result
     assert result["execution_pending_packages"] == []
+    assert result["full_history_complete_packages"] == ["pmi_state", "prices", "growth_output"]
+
+
+def test_repository_state_has_only_growth_execution_pending() -> None:
+    result = validate_full_entry(
+        ROOT / "config" / "macro_w1_execution_manifest.json",
+        ROOT / "artifacts" / "macro_r011" / "audits",
+    )
+    assert result["passed"], result
+    assert result["ready_packages"] == ["pmi_state", "prices", "growth_output"]
+    assert result["execution_pending_packages"] == ["growth_output"]
     assert result["full_history_complete_packages"] == ["pmi_state", "prices"]
+    assert result["blocked_packages"] == ["rates_liquidity", "money_credit"]
+    assert result["full_entry_ready"] is False
+    assert all(item["research_ready"] is False for item in result["audits"].values())
