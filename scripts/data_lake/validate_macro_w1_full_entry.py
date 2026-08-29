@@ -57,6 +57,24 @@ RATES_LEGACY_FULL_BLOCKERS = {
     "seven series lack two-period Gold",
     "CFETS historical path remains unverified",
 }
+MONEY_GOLD_COVERAGE = {
+    "ready_count": 5,
+    "required_count": 8,
+    "missing_series": [
+        "CN.LOANS.RMB.FLOW",
+        "CN.LOANS.CORP.MEDIUM_LONG.FLOW",
+        "CN.TSF.RMB_LOANS.FLOW",
+    ],
+}
+MONEY_FULL_BLOCKERS = [
+    "two monthly loan-flow definitions lack direct official observations",
+    "AFRE RMB-loans component awaits an authorized two-period Gold candidate and Sol review",
+    "attachment-vintage history discovery is not implemented",
+]
+MONEY_LEGACY_FULL_BLOCKERS = {
+    "two monthly loan-flow definitions lack direct official observations",
+    "attachment-vintage history discovery is not implemented",
+}
 
 
 def _blocker(code: str, detail: str) -> dict[str, str]:
@@ -214,6 +232,25 @@ def _rates_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
     return errors
 
 
+def _money_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    if package.get("gold_state") != "GOLD_BLOCKED_PARTIAL_5_OF_8":
+        errors.append(_blocker("MONEY_GOLD_STATE_MISMATCH", "money_credit Gold state must remain pre-candidate partial 5 of 8"))
+    if package.get("gold_coverage") != MONEY_GOLD_COVERAGE:
+        errors.append(_blocker("MONEY_GOLD_COVERAGE_MISMATCH", "money_credit Gold coverage must match the frozen pre-candidate 5/8 contract"))
+    if package.get("full_history_allowed") is not False:
+        errors.append(_blocker("MONEY_FULL_HISTORY_NOT_BLOCKED", "money_credit full history must remain disallowed"))
+    if package.get("full_blockers") != MONEY_FULL_BLOCKERS:
+        errors.append(_blocker("MONEY_FULL_BLOCKERS_MISMATCH", "money_credit must retain the exact direct-flow, AFRE-candidate, and history blockers"))
+    if package.get("shadow_allowed") is not False or package.get("shadow_state") != "BLOCKED_GOLD_INCOMPLETE":
+        errors.append(_blocker("MONEY_SHADOW_STATE_INVALID", "money_credit shadow execution must remain blocked"))
+    if package.get("research_ready") is not False:
+        errors.append(_blocker("MONEY_RESEARCH_READY_FORBIDDEN", "money_credit cannot be research ready"))
+    if package.get("formal_curated_written") is not False:
+        errors.append(_blocker("MONEY_FORMAL_WRITE_FORBIDDEN", "money_credit formal curated output must remain unwritten"))
+    return errors
+
+
 def check_growth_full_gate_v2(
     manifest_path: Path,
     start: str = GROWTH_START,
@@ -295,6 +332,8 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
             errors.append(_blocker("FULL_BLOCKERS_TYPE_INVALID", "full_blockers must be a list of strings"))
         if package_id == "rates_liquidity":
             errors.extend(_rates_blocked_gate_errors(package))
+        if package_id == "money_credit":
+            errors.extend(_money_blocked_gate_errors(package))
         if allowed is True:
             if package_id == "pmi_state":
                 errors.extend(_package_gate_errors(package, required_start="2009-06", required_end="2026-07", required_scope="official_release_vintage"))
@@ -374,6 +413,8 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
                 "specific_blockers_match": (
                     frozenset(details) in {frozenset(package["full_blockers"]), frozenset(RATES_LEGACY_FULL_BLOCKERS)}
                     if not package_allowed and package_id == "rates_liquidity"
+                    else frozenset(details) in {frozenset(package["full_blockers"]), frozenset(MONEY_LEGACY_FULL_BLOCKERS)}
+                    if not package_allowed and package_id == "money_credit"
                     else details == set(package["full_blockers"])
                     if not package_allowed
                     else execution_pending or execution_complete

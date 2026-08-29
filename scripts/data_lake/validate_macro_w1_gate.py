@@ -20,8 +20,8 @@ def validate(registry_path: Path, universe_path: Path) -> dict[str, object]:
     universe_by_id = {row["id"]: row for row in universe["series"]}
     decision_ids = [row["id"] for row in registry["confirmation_decisions"]]
     checks = {
-        "declared_count_is_34": registry["series_count"] == 34,
-        "exactly_34_series": len(rows) == 34,
+        "declared_count_is_35": registry["series_count"] == 35,
+        "exactly_35_series": len(rows) == 35,
         "unique_ids": len(ids) == len(set(ids)),
         "unique_canonical_ids": len(canonical_ids) == len(set(canonical_ids)),
         "all_ids_in_constitution_backlog": set(ids).issubset(universe_by_id),
@@ -32,7 +32,7 @@ def validate(registry_path: Path, universe_path: Path) -> dict[str, object]:
             registry["status"] == "DECISIONS_CONFIRMED"
             and registry["policies"]["human_confirmation_complete"]
             and not registry["policies"]["no_full_backfill_before_human_confirmation"]
-            and registry["confirmed_decision_ids"] == [f"W1_D{number}" for number in range(1, 10)]
+            and registry["confirmed_decision_ids"] == [f"W1_D{number}" for number in range(1, 11)]
             and decision_ids == registry["confirmed_decision_ids"]
         ),
         "rates_remain_shadow_only": registry["policies"]["rates_shadow_only_before_sol_review"],

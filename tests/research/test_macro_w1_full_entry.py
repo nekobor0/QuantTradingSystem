@@ -177,3 +177,46 @@ def test_rates_rejects_formal_curated_written_true(tmp_path: Path):
     result = validate_full_entry(path)
     assert not result["passed"]
     assert "rates_liquidity" in result["invalid_packages"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("gold_state", "GOLD_BLOCKED_PARTIAL_6_OF_8"),
+        ("full_history_allowed", True),
+        ("formal_curated_written", True),
+        ("research_ready", True),
+    ],
+)
+def test_money_rejects_premature_promotion(tmp_path: Path, field: str, value: object):
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    money = next(item for item in manifest["packages"] if item["package_id"] == "money_credit")
+    money[field] = value
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "money_credit" in result["invalid_packages"]
+
+
+def test_money_rejects_afre_candidate_blocker_removal(tmp_path: Path):
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    money = next(item for item in manifest["packages"] if item["package_id"] == "money_credit")
+    money["full_blockers"] = [item for item in money["full_blockers"] if "AFRE" not in item]
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "money_credit" in result["invalid_packages"]
+
+
+def test_money_rejects_premature_afre_coverage(tmp_path: Path):
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    money = next(item for item in manifest["packages"] if item["package_id"] == "money_credit")
+    money["gold_coverage"]["ready_count"] = 6
+    money["gold_coverage"]["missing_series"].remove("CN.TSF.RMB_LOANS.FLOW")
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "money_credit" in result["invalid_packages"]

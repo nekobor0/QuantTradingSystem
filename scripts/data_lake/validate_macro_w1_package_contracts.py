@@ -6,8 +6,9 @@ from collections import Counter
 from pathlib import Path
 
 
-EXPECTED = {"rates_liquidity": 11, "pmi_state": 8, "prices": 5, "money_credit": 7, "growth_output": 3}
-DECISIONS = {f"W1_D{number}" for number in range(1, 10)}
+EXPECTED = {"rates_liquidity": 11, "pmi_state": 8, "prices": 5, "money_credit": 8, "growth_output": 3}
+COMMON_DECISIONS = {f"W1_D{number}" for number in range(1, 10)}
+MONEY_DECISIONS = COMMON_DECISIONS | {"W1_D10"}
 
 
 def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, object]:
@@ -22,7 +23,11 @@ def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, ob
         "package_ids_exact": {item["package_id"] for item in contracts} == set(EXPECTED),
         "all_schema_v2": all(item["schema_version"] == 2 for item in contracts),
         "all_gold_decided": all(item["status"].startswith("GOLD_") for item in contracts),
-        "all_decisions_frozen": all(set(item["accepted_decisions"]) == DECISIONS for item in contracts),
+        "all_decisions_frozen": all(
+            set(item["accepted_decisions"])
+            == (MONEY_DECISIONS if item["package_id"] == "money_credit" else COMMON_DECISIONS)
+            for item in contracts
+        ),
         "source_whitelists_registered": all(set(item["source_whitelist"]).issubset(sources) for item in contracts),
     }
     metadata_ok = True

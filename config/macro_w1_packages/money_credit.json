@@ -1,11 +1,31 @@
 {
   "schema_version": 2,
-  "contract_id": "R011.W1.MONEY_CREDIT.V2",
+  "contract_id": "R011.W1.MONEY_CREDIT.V3",
   "package_id": "money_credit",
-  "status": "GOLD_BLOCKED_PARTIAL_5_OF_7",
-  "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9"],
+  "status": "GOLD_BLOCKED_PARTIAL_5_OF_8",
+  "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10"],
   "source_whitelist": ["PBOC_STATS"],
   "primary_key": ["series_id", "reference_period", "vintage_id"],
+  "gold_coverage": {
+    "ready_count": 5,
+    "required_count": 8,
+    "ready_series": ["CN.MONEY.M1.BALANCE", "CN.MONEY.M2.BALANCE", "CN.TSF.FLOW", "CN.TSF.STOCK", "CN.TSF.GOV_BOND.FLOW"],
+    "missing_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW", "CN.TSF.RMB_LOANS.FLOW"]
+  },
+  "full_history_allowed": false,
+  "formal_curated_written": false,
+  "research_ready": false,
+  "afre_rmb_loans_policy": {
+    "series_id": "CN.TSF.RMB_LOANS.FLOW",
+    "official_table": "AFRE(flow)",
+    "official_field": "RMB loans",
+    "semantic_scope": "loans_to_the_real_economy_afre_component",
+    "observation_policy": "direct_monthly_official_table_only",
+    "not_equivalent_to": ["CN.LOANS.RMB.FLOW"],
+    "cumulative_differencing_allowed": false,
+    "balance_differencing_allowed": false,
+    "methodology_version_required": true
+  },
   "series": [
     {"series_id":"CN.MONEY.M1.BALANCE","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_UNIT_GATE"},
     {"series_id":"CN.MONEY.M2.BALANCE","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_UNIT_GATE"},
@@ -13,7 +33,8 @@
     {"series_id":"CN.LOANS.CORP.MEDIUM_LONG.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"DEFINITION_GATE"},
     {"series_id":"CN.TSF.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
     {"series_id":"CN.TSF.STOCK","source":"PBOC_STATS","frequency":"monthly","unit":"trillion_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
-    {"series_id":"CN.TSF.GOV_BOND.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"METHODOLOGY_GATE"}
+    {"series_id":"CN.TSF.GOV_BOND.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"METHODOLOGY_GATE"},
+    {"series_id":"CN.TSF.RMB_LOANS.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"direct_afre_component_flow","pit_grade":"A","license_scope":"internal_research","implementation":"GOLD_CANDIDATE_AUTHORIZED"}
   ],
   "missing_policy": "no generic cumulative differencing; every attachment is a vintage; revisions do not overwrite",
   "readiness_rule": "two page-plus-attachment gold periods pass units, definitions and methodology-version checks"
