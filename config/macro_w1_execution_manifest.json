@@ -18,9 +18,19 @@
     {
       "package_id": "rates_liquidity",
       "order": 1,
-      "gold_state": "GOLD_BLOCKED_PARTIAL_4_OF_11",
+      "gold_state": "GOLD_BLOCKED_PARTIAL_9_OF_11",
+      "gold_coverage": {
+        "ready_count": 9,
+        "required_count": 11,
+        "missing_series": [
+          "CN.CHINABOND.GOV.YTM.1Y",
+          "CN.CHINABOND.GOV.YTM.10Y"
+        ]
+      },
       "shadow_allowed": false,
       "full_history_allowed": false,
+      "formal_curated_written": false,
+      "research_ready": false,
       "frequency_groups": [
         "business_daily",
         "monthly_event",
@@ -28,8 +38,8 @@
       ],
       "shadow_state": "BLOCKED_GOLD_INCOMPLETE",
       "full_blockers": [
-        "seven series lack two-period Gold",
-        "CFETS historical path remains unverified"
+        "CFETS DR007/R007 historical path remains unverified",
+        "ChinaBond 1Y/10Y Gold and full history remain blocked because sufficient authorization evidence has not been obtained"
       ]
     },
     {

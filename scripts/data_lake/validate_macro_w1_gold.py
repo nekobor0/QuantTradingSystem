@@ -6,10 +6,22 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts" / "data_lake"))
+
+from validate_macro_w1_rates_gold_candidate import (  # noqa: E402
+    EXISTING_READY_SERIES,
+    FULL_HISTORY_BLOCKED_SERIES,
+    GOLD_MISSING_SERIES,
+    NEW_READY_SERIES,
+    validate_rates_gold_candidate,
+)
+
+
 READY = "GOLD_READY_SHADOW_ONLY"
 
 
@@ -79,14 +91,42 @@ def validate_registry(registry_path: Path) -> dict[str, Any]:
             expected_series = {item["series_id"] for item in contract["series"]}
             covered = set(spec["covered_series"])
             blocked = set(spec["blocked_series"])
+            candidate = validate_rates_gold_candidate()
+            coverage = contract.get("gold_coverage", {})
+            coverage_exact = (
+                coverage.get("ready_count") == 9
+                and coverage.get("required_count") == 11
+                and set(coverage.get("ready_series", [])) == EXISTING_READY_SERIES | NEW_READY_SERIES
+                and set(coverage.get("missing_series", [])) == GOLD_MISSING_SERIES
+                and set(contract.get("full_history_blocked_series", [])) == FULL_HISTORY_BLOCKED_SERIES
+            )
+            registry_partition_exact = (
+                covered == EXISTING_READY_SERIES
+                and blocked == expected_series - EXISTING_READY_SERIES
+                and covered | blocked == expected_series
+                and not covered & blocked
+            )
+            checks = {
+                "legacy_gold_partition_exact": registry_partition_exact,
+                "candidate_evidence_valid": candidate["passed"],
+                "nine_of_eleven_coverage_exact": coverage_exact,
+                "package_remains_blocked": contract.get("status") == "GOLD_BLOCKED_PARTIAL_9_OF_11",
+                "formal_and_research_states_false": contract.get("full_history_allowed") is False and contract.get("formal_curated_written") is False and contract.get("research_ready") is False,
+            }
+            failures = sorted(name for name, passed in checks.items() if not passed)
             results[package_id] = {
                 "package_id": package_id,
-                "evidence_valid": covered | blocked == expected_series and not covered & blocked,
+                "evidence_valid": not failures,
                 "package_ready": False,
-                "status": spec["status"],
-                "checks": {"coverage_partition_exact": covered | blocked == expected_series and not covered & blocked},
+                "status": contract.get("status"),
+                "gold_ready_count": candidate["gold_ready_count"],
+                "gold_required_count": candidate["gold_required_count"],
+                "gold_missing": candidate["gold_missing"],
+                "full_history_blocked_series": candidate["full_history_blocked_series"],
+                "checks": checks,
                 "periods": {},
-                "failures": [],
+                "candidate": candidate,
+                "failures": failures,
             }
         else:
             results[package_id] = validate_package(package_id, spec, contract)

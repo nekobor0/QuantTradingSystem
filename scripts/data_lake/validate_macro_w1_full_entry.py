@@ -44,6 +44,19 @@ GROWTH_FORMAL_INPUT = {
     "source_map_sha256": "2ECB852AFD20A8510FC392F237B4D0E648D7ABE315B1A64553A426E1C56BC671",
     "formal_curated": "curated/w1_growth_output_official_mixed_pit.parquet",
 }
+RATES_GOLD_COVERAGE = {
+    "ready_count": 9,
+    "required_count": 11,
+    "missing_series": ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+}
+RATES_FULL_BLOCKERS = [
+    "CFETS DR007/R007 historical path remains unverified",
+    "ChinaBond 1Y/10Y Gold and full history remain blocked because sufficient authorization evidence has not been obtained",
+]
+RATES_LEGACY_FULL_BLOCKERS = {
+    "seven series lack two-period Gold",
+    "CFETS historical path remains unverified",
+}
 
 
 def _blocker(code: str, detail: str) -> dict[str, str]:
@@ -182,6 +195,25 @@ def _growth_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
     return errors
 
 
+def _rates_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    if package.get("gold_state") != "GOLD_BLOCKED_PARTIAL_9_OF_11":
+        errors.append(_blocker("RATES_GOLD_STATE_MISMATCH", "rates_liquidity Gold state must remain partial 9 of 11"))
+    if package.get("gold_coverage") != RATES_GOLD_COVERAGE:
+        errors.append(_blocker("RATES_GOLD_COVERAGE_MISMATCH", "rates_liquidity Gold coverage must match the frozen 9/11 contract"))
+    if package.get("full_history_allowed") is not False:
+        errors.append(_blocker("RATES_FULL_HISTORY_NOT_BLOCKED", "rates_liquidity full history must remain disallowed"))
+    if package.get("full_blockers") != RATES_FULL_BLOCKERS:
+        errors.append(_blocker("RATES_FULL_BLOCKERS_MISMATCH", "rates_liquidity must retain the exact CFETS and ChinaBond blockers"))
+    if package.get("shadow_allowed") is not False or package.get("shadow_state") != "BLOCKED_GOLD_INCOMPLETE":
+        errors.append(_blocker("RATES_SHADOW_STATE_INVALID", "rates_liquidity shadow execution must remain blocked"))
+    if package.get("research_ready", False) is not False:
+        errors.append(_blocker("RATES_RESEARCH_READY_FORBIDDEN", "rates_liquidity cannot be research ready"))
+    if package.get("formal_curated_written") is not False:
+        errors.append(_blocker("RATES_FORMAL_WRITE_FORBIDDEN", "rates_liquidity formal curated output must remain unwritten"))
+    return errors
+
+
 def check_growth_full_gate_v2(
     manifest_path: Path,
     start: str = GROWTH_START,
@@ -261,6 +293,8 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
             errors.append(_blocker("FULL_HISTORY_ALLOWED_TYPE_INVALID", "full_history_allowed must be a boolean"))
         if not isinstance(blockers, list) or not all(isinstance(item, str) for item in blockers):
             errors.append(_blocker("FULL_BLOCKERS_TYPE_INVALID", "full_blockers must be a list of strings"))
+        if package_id == "rates_liquidity":
+            errors.extend(_rates_blocked_gate_errors(package))
         if allowed is True:
             if package_id == "pmi_state":
                 errors.extend(_package_gate_errors(package, required_start="2009-06", required_end="2026-07", required_scope="official_release_vintage"))
@@ -338,7 +372,9 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
                 "execution_pending": execution_pending,
                 "execution_complete": execution_complete,
                 "specific_blockers_match": (
-                    details == set(package["full_blockers"])
+                    frozenset(details) in {frozenset(package["full_blockers"]), frozenset(RATES_LEGACY_FULL_BLOCKERS)}
+                    if not package_allowed and package_id == "rates_liquidity"
+                    else details == set(package["full_blockers"])
                     if not package_allowed
                     else execution_pending or execution_complete
                 ),

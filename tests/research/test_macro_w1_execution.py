@@ -31,6 +31,16 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     assert {key for key, item in packages.items() if item["full_history_allowed"]} == {"pmi_state", "prices", "growth_output"}
     assert all(packages[key]["full_blockers"] == [] for key in ("pmi_state", "prices", "growth_output"))
     assert all(len(packages[key]["full_blockers"]) >= 2 for key in ("rates_liquidity", "money_credit"))
+    assert packages["rates_liquidity"]["gold_state"] == "GOLD_BLOCKED_PARTIAL_9_OF_11"
+    assert packages["rates_liquidity"]["gold_coverage"] == {
+        "ready_count": 9,
+        "required_count": 11,
+        "missing_series": ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+    }
+    assert packages["rates_liquidity"]["shadow_allowed"] is False
+    assert packages["rates_liquidity"]["full_history_allowed"] is False
+    assert packages["rates_liquidity"]["formal_curated_written"] is False
+    assert packages["rates_liquidity"]["research_ready"] is False
     assert {key for key, item in packages.items() if item["shadow_state"] == "SHADOW_PASSED_SOL_REVIEW"} == {
         "pmi_state", "prices", "growth_output"
     }
