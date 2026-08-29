@@ -31,6 +31,12 @@ CANONICAL_COLUMNS = {
     "availability_evidence", "retrieved_at", "vintage_id", "raw_sha256", "parser_version",
 }
 SEMANTIC_SCOPE = "loans_to_the_real_economy_afre_component"
+FROZEN_HASHES = {
+    "expected": "BD8ACBA65DE854B3D7E90C6F738B4FF3E5154071E554273CEB770193743C7F58",
+    "source_map": "7CCF7D435E8CB3CA35C3C8B48C44A6A14B645BD9685446854D8EB386FF5F73BE",
+    "manual_audit": "29D37D52D69CE8AE67A1F383C276EBCB440E4BA0C2B14D7431793D2E9879C4F1",
+    "candidate_audit": "D246E20E6167BBE78DE4FF6C7CD32883350002FF1C8ED564AE33E69792019BDD",
+}
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -66,6 +72,7 @@ def validate_money_credit_afre_candidate(
     audit_path: Path = AUDIT_PATH,
     raw_path: Path = RAW_PATH,
     raw_manifest_path: Path = RAW_MANIFEST_PATH,
+    frozen_hashes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     paths = {
         "expected": candidate_root / "expected.json",
@@ -77,6 +84,7 @@ def validate_money_credit_afre_candidate(
     }
     checks: dict[str, bool] = {"required_files_present": all(path.is_file() for path in paths.values())}
     try:
+        expected_hashes = FROZEN_HASHES if frozen_hashes is None else frozen_hashes
         expected = _load(paths["expected"])
         source_map = _load(paths["source_map"])
         manual = _load(paths["manual_audit"])
@@ -96,6 +104,8 @@ def validate_money_credit_afre_candidate(
         accepted_sources = [item for item in source_items if isinstance(item, dict) and item.get("accepted") is True]
         checks.update(
             {
+                "frozen_candidate_sha256_exact": set(expected_hashes) == set(FROZEN_HASHES)
+                and all(_sha256(paths[name]) == digest.upper() for name, digest in expected_hashes.items()),
                 "candidate_identity_exact": expected.get("schema_version") == 2
                 and expected.get("package_id") == "money_credit"
                 and expected.get("candidate_id") == "R011.W1.MONEY_CREDIT.AFRE.GOLD_CANDIDATE_V1",
@@ -122,18 +132,31 @@ def validate_money_credit_afre_candidate(
                 ),
                 "timestamps_ordered": timestamps_ordered,
                 "official_release_time_exact": all(
-                    row.get("release_at") == PAGE_TIME and row.get("available_at") == PAGE_TIME for row in rows
+                    row.get("release_at") == PAGE_TIME
+                    and row.get("available_at") == PAGE_TIME
+                    and row.get("tradable_at") == PAGE_TIME
+                    for row in rows
                 ),
                 "legacy_total_loan_ids_absent": not ({row.get("series_id") for row in rows} & LEGACY_BLOCKED_SERIES),
                 "expected_state_exact": expected.get("passed_series") == [SERIES_ID]
-                and set(expected.get("blocked_series", [])) == LEGACY_BLOCKED_SERIES,
+                and set(expected.get("blocked_series", [])) == LEGACY_BLOCKED_SERIES
+                and expected.get("status") == "GOLD_CANDIDATE_AWAITING_SOL_REVIEW"
+                and expected.get("semantic_scope") == SEMANTIC_SCOPE
+                and expected.get("full_history_allowed") is False
+                and expected.get("formal_curated_written") is False
+                and expected.get("research_ready") is False,
                 "source_map_exact": len(accepted_sources) == 1
                 and accepted_sources[0].get("source_id") == "PBOC_STATS"
                 and accepted_sources[0].get("official_table") == "AFRE(flow)"
                 and accepted_sources[0].get("official_field") == "RMB loans"
                 and accepted_sources[0].get("semantic_scope") == SEMANTIC_SCOPE
                 and accepted_sources[0].get("not_equivalent_to") == ["CN.LOANS.RMB.FLOW"]
-                and accepted_sources[0].get("raw_sha256", "").upper() == RAW_SHA256,
+                and accepted_sources[0].get("raw_sha256", "").upper() == RAW_SHA256
+                and source_map.get("semantic_scope_guard", {}).get("series_id") == SERIES_ID
+                and source_map.get("semantic_scope_guard", {}).get("meaning") == SEMANTIC_SCOPE
+                and source_map.get("semantic_scope_guard", {}).get("not_total_national_rmb_loan_flow") is True
+                and source_map.get("semantic_scope_guard", {}).get("cumulative_differencing_allowed") is False
+                and source_map.get("semantic_scope_guard", {}).get("balance_differencing_allowed") is False,
                 "manual_audit_fail_closed": manual.get("status") == "GOLD_CANDIDATE_AWAITING_SOL_REVIEW"
                 and manual.get("passed_series") == [SERIES_ID]
                 and set(manual.get("blocked_series", [])) == LEGACY_BLOCKED_SERIES

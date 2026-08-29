@@ -40,13 +40,30 @@
       }
     },
     "money_credit": {
-      "status": "GOLD_BLOCKED_PARTIAL_5_OF_8",
+      "status": "GOLD_BLOCKED_PARTIAL_6_OF_8",
       "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_money_credit",
       "fixtures": ["2026-06", "2026-07"],
       "required_files": ["pboc_money_supply.htm", "pboc_tsf_flow.htm", "pboc_tsf_stock.htm", "expected.json", "checksums.json"],
       "covered_series": ["CN.MONEY.M1.BALANCE", "CN.MONEY.M2.BALANCE", "CN.TSF.FLOW", "CN.TSF.STOCK", "CN.TSF.GOV_BOND.FLOW"],
       "blocked_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW", "CN.TSF.RMB_LOANS.FLOW"],
-      "blocker": "The two total-loan series lack direct monthly observations; the separately defined AFRE RMB-loans component awaits its authorized two-period Gold candidate. Generic cumulative or balance differencing remains forbidden.",
+      "candidate_evidence": {
+        "series_id": "CN.TSF.RMB_LOANS.FLOW",
+        "candidate_root": "artifacts/macro_r011/gold_fixtures/w1_money_credit_candidate_v3",
+        "candidate_audit": "artifacts/macro_r011/audits/w1_money_credit_afre_gold_candidate_v1.json",
+        "frozen_sha256": {
+          "expected.json": "BD8ACBA65DE854B3D7E90C6F738B4FF3E5154071E554273CEB770193743C7F58",
+          "source_map.json": "7CCF7D435E8CB3CA35C3C8B48C44A6A14B645BD9685446854D8EB386FF5F73BE",
+          "manual_audit.json": "29D37D52D69CE8AE67A1F383C276EBCB440E4BA0C2B14D7431793D2E9879C4F1",
+          "candidate_audit": "D246E20E6167BBE78DE4FF6C7CD32883350002FF1C8ED564AE33E69792019BDD"
+        }
+      },
+      "effective_gold_coverage": {
+        "ready_count": 6,
+        "required_count": 8,
+        "ready_series": ["CN.MONEY.M1.BALANCE", "CN.MONEY.M2.BALANCE", "CN.TSF.FLOW", "CN.TSF.STOCK", "CN.TSF.GOV_BOND.FLOW", "CN.TSF.RMB_LOANS.FLOW"],
+        "missing_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"]
+      },
+      "blocker": "The two total-loan series lack direct monthly observations, and AFRE RMB-loans attachment-vintage full-history discovery is not implemented. Generic cumulative or balance differencing remains forbidden.",
       "official_urls": {
         "2026-06": ["https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081416590597261.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417010772070.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417011913181.htm"],
         "2026-07": ["https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081416590597261.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417010772070.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417011913181.htm"]

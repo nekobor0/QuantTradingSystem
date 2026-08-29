@@ -41,14 +41,13 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     assert packages["rates_liquidity"]["full_history_allowed"] is False
     assert packages["rates_liquidity"]["formal_curated_written"] is False
     assert packages["rates_liquidity"]["research_ready"] is False
-    assert packages["money_credit"]["gold_state"] == "GOLD_BLOCKED_PARTIAL_5_OF_8"
+    assert packages["money_credit"]["gold_state"] == "GOLD_BLOCKED_PARTIAL_6_OF_8"
     assert packages["money_credit"]["gold_coverage"] == {
-        "ready_count": 5,
+        "ready_count": 6,
         "required_count": 8,
         "missing_series": [
             "CN.LOANS.RMB.FLOW",
             "CN.LOANS.CORP.MEDIUM_LONG.FLOW",
-            "CN.TSF.RMB_LOANS.FLOW",
         ],
     }
     assert packages["money_credit"]["shadow_allowed"] is False

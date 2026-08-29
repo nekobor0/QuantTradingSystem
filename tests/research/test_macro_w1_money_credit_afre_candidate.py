@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 import shutil
 
@@ -8,6 +9,7 @@ from scripts.data_lake.validate_macro_w1_money_credit_afre_candidate import (
     AUDIT_PATH,
     CANONICAL_COLUMNS,
     CANDIDATE_ROOT,
+    FROZEN_HASHES,
     PAGE_TIME,
     RAW_MANIFEST_PATH,
     RAW_PATH,
@@ -48,7 +50,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
                 "source_record_id": "AFRE(flow)|RMB loans",
                 "release_at": PAGE_TIME,
                 "available_at": PAGE_TIME,
-                "tradable_at": "2026-08-17T09:30:00+08:00",
+                "tradable_at": PAGE_TIME,
                 "availability_evidence": "PBOC official page timestamp",
                 "retrieved_at": "2026-08-29T19:30:10+08:00",
                 "vintage_id": "PBOC_AFRE_2026_08_14",
@@ -68,6 +70,11 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
             "rows": rows,
             "passed_series": [SERIES_ID],
             "blocked_series": BLOCKED,
+            "status": "GOLD_CANDIDATE_AWAITING_SOL_REVIEW",
+            "semantic_scope": SEMANTIC_SCOPE,
+            "full_history_allowed": False,
+            "formal_curated_written": False,
+            "research_ready": False,
         },
     )
     _write(
@@ -86,6 +93,13 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
                     "raw_sha256": RAW_SHA256,
                 }
             ],
+            "semantic_scope_guard": {
+                "series_id": SERIES_ID,
+                "meaning": SEMANTIC_SCOPE,
+                "not_total_national_rmb_loan_flow": True,
+                "cumulative_differencing_allowed": False,
+                "balance_differencing_allowed": False,
+            },
         },
     )
     manual = {
@@ -115,8 +129,37 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     return candidate, audit_path, raw_path, manifest_path
 
 
-def _validate(paths: tuple[Path, Path, Path, Path]):
-    return validate_money_credit_afre_candidate(*paths)
+def _fixture_hashes(paths: tuple[Path, Path, Path, Path]) -> dict[str, str]:
+    candidate, audit_path, _, _ = paths
+    files = {
+        "expected": candidate / "expected.json",
+        "source_map": candidate / "source_map.json",
+        "manual_audit": candidate / "manual_audit.json",
+        "candidate_audit": audit_path,
+    }
+    return {name: hashlib.sha256(path.read_bytes()).hexdigest().upper() for name, path in files.items()}
+
+
+def _validate(paths: tuple[Path, Path, Path, Path], frozen_hashes: dict[str, str] | None = None):
+    return validate_money_credit_afre_candidate(
+        *paths,
+        frozen_hashes=_fixture_hashes(paths) if frozen_hashes is None else frozen_hashes,
+    )
+
+
+def test_afre_candidate_matches_sol_frozen_hashes():
+    result = validate_money_credit_afre_candidate()
+    assert result["passed"], result
+    assert result["checks"]["frozen_candidate_sha256_exact"] is True
+
+
+@pytest.mark.parametrize("name", sorted(FROZEN_HASHES))
+def test_afre_candidate_rejects_any_wrong_frozen_sha(name: str):
+    hashes = dict(FROZEN_HASHES)
+    hashes[name] = "0" * 64
+    result = validate_money_credit_afre_candidate(frozen_hashes=hashes)
+    assert not result["passed"]
+    assert "frozen_candidate_sha256_exact" in result["failures"]
 
 
 def test_afre_candidate_accepts_exact_direct_monthly_component(tmp_path: Path):

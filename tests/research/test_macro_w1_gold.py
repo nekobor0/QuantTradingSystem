@@ -18,17 +18,21 @@ def test_w1_gold_registry_has_evidence_backed_ready_and_blocked_packages():
     assert rates["gold_required_count"] == 11
     assert rates["package_ready"] is False
     money = result["packages"]["money_credit"]
-    assert money["status"] == "GOLD_BLOCKED_PARTIAL_5_OF_8"
-    assert money["checks"]["five_of_eight_pre_candidate_exact"] is True
+    assert money["status"] == "GOLD_BLOCKED_PARTIAL_6_OF_8"
+    assert money["gold_ready_count"] == 6
+    assert money["gold_required_count"] == 8
+    assert money["gold_missing"] == ["CN.LOANS.CORP.MEDIUM_LONG.FLOW", "CN.LOANS.RMB.FLOW"]
+    assert money["checks"]["legacy_five_of_eight_partition_exact"] is True
+    assert money["checks"]["candidate_evidence_valid"] is True
+    assert money["checks"]["six_of_eight_effective_coverage_exact"] is True
     assert money["checks"]["afre_semantic_policy_exact"] is True
+    assert money["checks"]["afre_series_gold_state_exact"] is True
 
 
-def test_w1_gold_rejects_premature_afre_coverage(tmp_path: Path):
+def test_w1_gold_rejects_candidate_frozen_sha_tamper(tmp_path: Path):
     registry = json.loads((ROOT / "config" / "macro_w1_gold_registry.json").read_text(encoding="utf-8"))
     money = registry["packages"]["money_credit"]
-    money["status"] = "GOLD_BLOCKED_PARTIAL_6_OF_8"
-    money["covered_series"].append("CN.TSF.RMB_LOANS.FLOW")
-    money["blocked_series"].remove("CN.TSF.RMB_LOANS.FLOW")
+    money["candidate_evidence"]["frozen_sha256"]["expected.json"] = "0" * 64
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(registry), encoding="utf-8")
     result = validate_registry(path)

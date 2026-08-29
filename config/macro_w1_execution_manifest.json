@@ -79,14 +79,13 @@
     {
       "package_id": "money_credit",
       "order": 4,
-      "gold_state": "GOLD_BLOCKED_PARTIAL_5_OF_8",
+      "gold_state": "GOLD_BLOCKED_PARTIAL_6_OF_8",
       "gold_coverage": {
-        "ready_count": 5,
+        "ready_count": 6,
         "required_count": 8,
         "missing_series": [
           "CN.LOANS.RMB.FLOW",
-          "CN.LOANS.CORP.MEDIUM_LONG.FLOW",
-          "CN.TSF.RMB_LOANS.FLOW"
+          "CN.LOANS.CORP.MEDIUM_LONG.FLOW"
         ]
       },
       "shadow_allowed": false,
@@ -98,9 +97,8 @@
       ],
       "shadow_state": "BLOCKED_GOLD_INCOMPLETE",
       "full_blockers": [
-        "two monthly loan-flow definitions lack direct official observations",
-        "AFRE RMB-loans component awaits an authorized two-period Gold candidate and Sol review",
-        "attachment-vintage history discovery is not implemented"
+        "two monthly total-loan flow definitions lack direct official observations",
+        "AFRE RMB-loans attachment-vintage full-history discovery is not implemented"
       ]
     },
     {
