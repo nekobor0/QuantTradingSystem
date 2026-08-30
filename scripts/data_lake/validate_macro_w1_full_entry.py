@@ -45,17 +45,51 @@ GROWTH_FORMAL_INPUT = {
     "formal_curated": "curated/w1_growth_output_official_mixed_pit.parquet",
 }
 RATES_GOLD_COVERAGE = {
-    "ready_count": 9,
+    "ready_count": 11,
     "required_count": 11,
-    "missing_series": ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+    "missing_series": [],
 }
 RATES_FULL_BLOCKERS = [
-    "CFETS DR007/R007 historical path remains unverified",
-    "ChinaBond 1Y/10Y Gold and full history remain blocked because sufficient authorization evidence has not been obtained",
+    "CFETS DR007/R007 requested history is incomplete: 2026-07-27 through 2026-08-12 remain unclosed",
 ]
-RATES_LEGACY_FULL_BLOCKERS = {
-    "seven series lack two-period Gold",
-    "CFETS historical path remains unverified",
+RATES_LEGACY_FULL_BLOCKER_SETS = {
+    frozenset(
+        {
+            "seven series lack two-period Gold",
+            "CFETS historical path remains unverified",
+        }
+    ),
+    frozenset(
+        {
+            "CFETS DR007/R007 historical path remains unverified",
+            "ChinaBond 1Y/10Y Gold and full history remain blocked because sufficient authorization evidence has not been obtained",
+        }
+    ),
+}
+RATES_CHINABOND_HISTORY_EVIDENCE = {
+    "status": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "series_ids": ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+    "history_evidence_complete": True,
+    "formal_execution_allowed": False,
+    "formal_curated_written": False,
+    "research_ready": False,
+    "full_window": {
+        "start": "2002-01-04",
+        "end": "2026-08-28",
+        "scope": "user_provided_official_annual_exports_pit_c_exploratory",
+        "observed_dates_per_series": 6159,
+        "observed_rows": 12318,
+        "pit_grade": "C",
+    },
+    "candidate_input": {
+        "root": "state/w1_rates_liquidity_evidence_luna_20260830/chinabond_ytm_full_candidate",
+        "candidate": "chinabond_ytm_full_candidate.parquet",
+        "candidate_sha256": "CD75349939256CA0A90DCC071B9B982F94D046291D27E19DFA487C188D9F5197",
+        "expected_sha256": "494F1CFF7D2CCF4A23DD27D7CCADA852C89D3B1C98CD80DC061D6C71536EE8C5",
+        "source_map_sha256": "34CAE8DDECA6B0B0A343A0E4BB5907CA7D94E7F55AC2F730830D95349D1B4EA3",
+        "manual_audit_sha256": "138BFEBDACE5492A4FEB355899C8D31A2CA13760A14C9A7B1A09EA6F180EB1A5",
+        "candidate_audit_sha256": "54739F29FAD0013926141C17770CCED71BE9E4609EEEB6F6B930843670C24A7D",
+    },
 }
 MONEY_GOLD_COVERAGE = {
     "ready_count": 6,
@@ -249,16 +283,18 @@ def _growth_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
 
 def _rates_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
-    if package.get("gold_state") != "GOLD_BLOCKED_PARTIAL_9_OF_11":
-        errors.append(_blocker("RATES_GOLD_STATE_MISMATCH", "rates_liquidity Gold state must remain partial 9 of 11"))
+    if package.get("gold_state") != "GOLD_READY_11_OF_11_FULL_HISTORY_BLOCKED_CFETS":
+        errors.append(_blocker("RATES_GOLD_STATE_MISMATCH", "rates_liquidity Gold state must be complete 11 of 11 while CFETS full history remains blocked"))
     if package.get("gold_coverage") != RATES_GOLD_COVERAGE:
-        errors.append(_blocker("RATES_GOLD_COVERAGE_MISMATCH", "rates_liquidity Gold coverage must match the frozen 9/11 contract"))
+        errors.append(_blocker("RATES_GOLD_COVERAGE_MISMATCH", "rates_liquidity Gold coverage must match the frozen 11/11 contract"))
     if package.get("full_history_allowed") is not False:
         errors.append(_blocker("RATES_FULL_HISTORY_NOT_BLOCKED", "rates_liquidity full history must remain disallowed"))
     if package.get("full_blockers") != RATES_FULL_BLOCKERS:
-        errors.append(_blocker("RATES_FULL_BLOCKERS_MISMATCH", "rates_liquidity must retain the exact CFETS and ChinaBond blockers"))
-    if package.get("shadow_allowed") is not False or package.get("shadow_state") != "BLOCKED_GOLD_INCOMPLETE":
-        errors.append(_blocker("RATES_SHADOW_STATE_INVALID", "rates_liquidity shadow execution must remain blocked"))
+        errors.append(_blocker("RATES_FULL_BLOCKERS_MISMATCH", "rates_liquidity must retain only the exact CFETS DR007/R007 blocker"))
+    if package.get("shadow_allowed") is not False or package.get("shadow_state") != "BLOCKED_FULL_HISTORY_INCOMPLETE":
+        errors.append(_blocker("RATES_SHADOW_STATE_INVALID", "rates_liquidity package execution must remain blocked by incomplete CFETS history"))
+    if package.get("series_history_evidence") != {"chinabond_government_ytm": RATES_CHINABOND_HISTORY_EVIDENCE}:
+        errors.append(_blocker("RATES_CHINABOND_EVIDENCE_MISMATCH", "ChinaBond PIT-C series history evidence must match the frozen 12,318-row contract"))
     if package.get("research_ready", False) is not False:
         errors.append(_blocker("RATES_RESEARCH_READY_FORBIDDEN", "rates_liquidity cannot be research ready"))
     if package.get("formal_curated_written") is not False:
@@ -459,7 +495,7 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
         "ready_packages_have_valid_gate": all(package_id not in invalid_packages for package_id in ready_packages),
         "blocked_packages_have_explicit_blockers": all(package_id not in invalid_packages for package_id in blocked_packages),
         "three_shadow_passed": sum(isinstance(item, dict) and item.get("shadow_state") == "SHADOW_PASSED_SOL_REVIEW" for item in packages) == 3 if isinstance(packages, list) else False,
-        "one_gold_blocked": sum(isinstance(item, dict) and item.get("shadow_state") == "BLOCKED_GOLD_INCOMPLETE" for item in packages) == 1 if isinstance(packages, list) else False,
+        "rates_gold_ready_full_history_blocked": sum(isinstance(item, dict) and item.get("shadow_state") == "BLOCKED_FULL_HISTORY_INCOMPLETE" for item in packages) == 1 if isinstance(packages, list) else False,
         "money_gold_ready_without_package_shadow": sum(isinstance(item, dict) and item.get("shadow_state") == "GOLD_READY_NO_PACKAGE_SHADOW" for item in packages) == 1 if isinstance(packages, list) else False,
     }
     audits: dict[str, Any] = {}
@@ -485,7 +521,7 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
                 "execution_pending": execution_pending,
                 "execution_complete": execution_complete,
                 "specific_blockers_match": (
-                    frozenset(details) in {frozenset(package["full_blockers"]), frozenset(RATES_LEGACY_FULL_BLOCKERS)}
+                    frozenset(details) in {frozenset(package["full_blockers"]), *RATES_LEGACY_FULL_BLOCKER_SETS}
                     if not package_allowed and package_id == "rates_liquidity"
                     else frozenset(details) in {frozenset(package["full_blockers"]), *MONEY_LEGACY_FULL_BLOCKER_SETS}
                     if not package_allowed and package_id == "money_credit"

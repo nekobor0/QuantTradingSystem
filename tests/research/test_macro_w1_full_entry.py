@@ -157,6 +157,32 @@ def test_rates_rejects_missing_full_history_blocker(tmp_path: Path):
     assert "rates_liquidity" in result["invalid_packages"]
 
 
+def test_rates_rejects_chinabond_history_evidence_tamper(tmp_path: Path):
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    rates = next(item for item in manifest["packages"] if item["package_id"] == "rates_liquidity")
+    rates["series_history_evidence"]["chinabond_government_ytm"]["full_window"]["pit_grade"] = "A"
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "rates_liquidity" in result["invalid_packages"]
+
+
+def test_rates_rejects_gold_coverage_rollback(tmp_path: Path):
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    rates = next(item for item in manifest["packages"] if item["package_id"] == "rates_liquidity")
+    rates["gold_coverage"] = {
+        "ready_count": 9,
+        "required_count": 11,
+        "missing_series": ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+    }
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "rates_liquidity" in result["invalid_packages"]
+
+
 def test_rates_rejects_research_ready_true(tmp_path: Path):
     manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
     rates = next(item for item in manifest["packages"] if item["package_id"] == "rates_liquidity")

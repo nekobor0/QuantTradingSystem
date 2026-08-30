@@ -39,12 +39,12 @@ def _rehash(candidate_root: Path, audit_path: Path) -> dict[str, str]:
     return {name: hashlib.sha256(path.read_bytes()).hexdigest().upper() for name, path in paths.items()}
 
 
-def test_rates_gold_candidate_accepts_frozen_nine_of_eleven_evidence():
+def test_rates_gold_candidate_accepts_frozen_eleven_of_eleven_evidence():
     result = validate_rates_gold_candidate()
     assert result["passed"], result
-    assert result["gold_ready_count"] == 9
+    assert result["gold_ready_count"] == 11
     assert result["gold_required_count"] == 11
-    assert result["gold_missing"] == ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"]
+    assert result["gold_missing"] == []
 
 
 @pytest.mark.parametrize("name", sorted(FROZEN_HASHES))

@@ -8,12 +8,20 @@ import html
 import json
 import math
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts" / "data_lake"))
+
+from validate_macro_w1_chinabond_full_candidate import (  # noqa: E402
+    SERIES as CHINABOND_READY_SERIES,
+    validate_chinabond_full_candidate,
+)
+
+
 CANDIDATE_ROOT = ROOT / "artifacts" / "macro_r011" / "gold_fixtures" / "w1_rates_candidate_v2"
 AUDIT_PATH = ROOT / "artifacts" / "macro_r011" / "audits" / "w1_rates_gold_candidate_v2.json"
 FROZEN_HASHES = {
@@ -35,12 +43,14 @@ EXISTING_READY_SERIES = {
     "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
     "CN.PBOC.MLF.1Y.RATE",
 }
-GOLD_MISSING_SERIES = {
+LEGACY_GOLD_MISSING_SERIES = {
     "CN.CHINABOND.GOV.YTM.1Y",
     "CN.CHINABOND.GOV.YTM.10Y",
 }
-GOLD_MISSING_ORDER = ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"]
-FULL_HISTORY_BLOCKED_SERIES = GOLD_MISSING_SERIES | {"CN.REPO.DR007", "CN.REPO.R007"}
+GOLD_MISSING_SERIES: set[str] = set()
+GOLD_MISSING_ORDER: list[str] = []
+FULL_HISTORY_BLOCKED_SERIES = {"CN.REPO.DR007", "CN.REPO.R007"}
+LEGACY_FULL_HISTORY_BLOCKED_SERIES = LEGACY_GOLD_MISSING_SERIES | FULL_HISTORY_BLOCKED_SERIES
 EXPECTED_PERIODS = {
     "CN.SHIBOR.ON": {"2026-08-24", "2026-08-25"},
     "CN.SHIBOR.1W": {"2026-08-24", "2026-08-25"},
@@ -112,11 +122,11 @@ def validate_rates_gold_candidate(
                 "unique_primary_keys": len(keys) == len(set(keys)),
                 "values_and_units_valid": all(type(row.get("value")) in {int, float} and math.isfinite(row["value"]) and 0.0 <= row["value"] <= 20.0 and row.get("unit") == "percent_per_annum" for row in rows),
                 "timestamps_ordered": all(datetime.fromisoformat(row["release_at"]) <= datetime.fromisoformat(row["available_at"]) <= datetime.fromisoformat(row["tradable_at"]) <= datetime.fromisoformat(row["retrieved_at"]) for row in rows),
-                "blocked_series_have_no_rows": not row_series & FULL_HISTORY_BLOCKED_SERIES,
+                "blocked_series_have_no_rows": not row_series & LEGACY_FULL_HISTORY_BLOCKED_SERIES,
                 "raw_hashes_known": all(row.get("raw_sha256") in RAW_FILES for row in rows),
-                "manual_audit_exact": set(manual.get("passed_series", [])) == NEW_READY_SERIES and set(manual.get("blocked_series", [])) == FULL_HISTORY_BLOCKED_SERIES and manual.get("failures") == [] and manual.get("checks", {}).get("cfets_repo_new_mechanism") is False,
+                "manual_audit_exact": set(manual.get("passed_series", [])) == NEW_READY_SERIES and set(manual.get("blocked_series", [])) == LEGACY_FULL_HISTORY_BLOCKED_SERIES and manual.get("failures") == [] and manual.get("checks", {}).get("cfets_repo_new_mechanism") is False,
                 "source_map_fail_closed": source_map.get("package_id") == "rates_liquidity" and any(item.get("source_id") == "CHINABOND" and item.get("status") == "LICENSE_GATE" and item.get("data_files") == [] for item in source_map.get("sources", [])) and any(item.get("source_id") == "CFETS_REPO_HISTORY" and item.get("new_independent_mechanism_found") is False for item in source_map.get("sources", [])),
-                "audit_fail_closed": set(audit.get("passed_series", [])) == NEW_READY_SERIES and set(audit.get("blocked_series", [])) == FULL_HISTORY_BLOCKED_SERIES and audit.get("full_history_allowed") is False and audit.get("formal_curated_written") is False and audit.get("research_ready") is False and audit.get("failures") == [],
+                "audit_fail_closed": set(audit.get("passed_series", [])) == NEW_READY_SERIES and set(audit.get("blocked_series", [])) == LEGACY_FULL_HISTORY_BLOCKED_SERIES and audit.get("full_history_allowed") is False and audit.get("formal_curated_written") is False and audit.get("research_ready") is False and audit.get("failures") == [],
             }
         )
         checks["raw_hashes_match"] = checks["raw_hashes_known"] and all(
@@ -143,14 +153,18 @@ def validate_rates_gold_candidate(
             and row["release_at"].replace("T", "").replace(":00+08:00", "") in lpr_text[row["reference_period"]]
             for row in rows if row["series_id"] in {"CN.LPR.1Y", "CN.LPR.5Y_PLUS"}
         )
+        chinabond = validate_chinabond_full_candidate()
+        checks["chinabond_candidate_evidence_valid"] = chinabond["passed"]
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError, KeyError, StopIteration):
         checks["candidate_parse_and_crosscheck"] = False
     failures = sorted(name for name, passed in checks.items() if not passed)
+    legacy_checks = {name: passed for name, passed in checks.items() if name != "chinabond_candidate_evidence_valid"}
+    legacy_passed = all(legacy_checks.values())
     return {
         "passed": not failures,
-        "gold_ready_count": 9 if not failures else 4,
+        "gold_ready_count": 11 if not failures else 9 if legacy_passed else 4,
         "gold_required_count": 11,
-        "gold_missing": GOLD_MISSING_ORDER,
+        "gold_missing": GOLD_MISSING_ORDER if not failures else sorted(LEGACY_GOLD_MISSING_SERIES) if legacy_passed else sorted(NEW_READY_SERIES | CHINABOND_READY_SERIES),
         "full_history_blocked_series": sorted(FULL_HISTORY_BLOCKED_SERIES),
         "checks": checks,
         "failures": failures,

@@ -59,3 +59,11 @@ def test_v2_rejects_unapproved_metadata_and_bad_pit_grade() -> None:
     upgraded = upgrade_canonical_v1_to_v2(_v1())
     upgraded.loc[0, "pit_grade"] = "PERFECT"
     assert validate_canonical_v2(upgraded)["failures"] == ["pit_grade_allowed"]
+
+
+def test_v2_accepts_user_provided_internal_research_scope_only_as_explicit_enum() -> None:
+    upgraded = upgrade_canonical_v1_to_v2(_v1())
+    upgraded.loc[0, "license_scope"] = "user_provided_internal_research"
+    assert validate_canonical_v2(upgraded)["passed"] is True
+    upgraded.loc[0, "license_scope"] = "user_says_ok"
+    assert validate_canonical_v2(upgraded)["failures"] == ["license_scope_allowed"]

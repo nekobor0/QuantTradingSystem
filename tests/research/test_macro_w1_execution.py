@@ -30,13 +30,21 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     packages = {item["package_id"]: item for item in manifest["packages"]}
     assert {key for key, item in packages.items() if item["full_history_allowed"]} == {"pmi_state", "prices", "growth_output"}
     assert all(packages[key]["full_blockers"] == [] for key in ("pmi_state", "prices", "growth_output"))
-    assert all(len(packages[key]["full_blockers"]) >= 2 for key in ("rates_liquidity", "money_credit"))
-    assert packages["rates_liquidity"]["gold_state"] == "GOLD_BLOCKED_PARTIAL_9_OF_11"
+    assert len(packages["rates_liquidity"]["full_blockers"]) == 1
+    assert len(packages["money_credit"]["full_blockers"]) >= 2
+    assert packages["rates_liquidity"]["gold_state"] == "GOLD_READY_11_OF_11_FULL_HISTORY_BLOCKED_CFETS"
     assert packages["rates_liquidity"]["gold_coverage"] == {
-        "ready_count": 9,
+        "ready_count": 11,
         "required_count": 11,
-        "missing_series": ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+        "missing_series": [],
     }
+    chinabond = packages["rates_liquidity"]["series_history_evidence"]["chinabond_government_ytm"]
+    assert chinabond["history_evidence_complete"] is True
+    assert chinabond["formal_execution_allowed"] is False
+    assert chinabond["formal_curated_written"] is False
+    assert chinabond["research_ready"] is False
+    assert chinabond["full_window"]["observed_rows"] == 12318
+    assert chinabond["full_window"]["pit_grade"] == "C"
     assert packages["rates_liquidity"]["shadow_allowed"] is False
     assert packages["rates_liquidity"]["full_history_allowed"] is False
     assert packages["rates_liquidity"]["formal_curated_written"] is False
@@ -95,6 +103,26 @@ def test_money_contract_has_matching_series_level_afre_gate():
     assert package["canonical_scope_policy"]["derived_replacement_implemented"] is False
     assert package["canonical_scope_policy"]["cumulative_differencing_allowed"] is False
     assert package["canonical_scope_policy"]["balance_differencing_allowed"] is False
+
+
+def test_rates_contract_has_frozen_chinabond_pit_c_evidence() -> None:
+    package = json.loads((ROOT / "config" / "macro_w1_packages" / "rates_liquidity.json").read_text(encoding="utf-8"))
+    assert package["status"] == "GOLD_READY_11_OF_11_FULL_HISTORY_BLOCKED_CFETS"
+    assert package["gold_coverage"]["ready_count"] == 11
+    assert package["gold_coverage"]["missing_series"] == []
+    assert package["full_history_blocked_series"] == ["CN.REPO.DR007", "CN.REPO.R007"]
+    evidence = package["chinabond_full_history_evidence"]
+    assert evidence["history_evidence_complete"] is True
+    assert evidence["formal_execution_allowed"] is False
+    assert evidence["formal_curated_written"] is False
+    assert evidence["research_ready"] is False
+    assert evidence["window"]["observed_rows"] == 12318
+    assert evidence["window"]["pit_grade"] == "C"
+    series = {item["series_id"]: item for item in package["series"]}
+    for series_id in ("CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"):
+        assert series[series_id]["pit_grade"] == "C"
+        assert series[series_id]["license_scope"] == "user_provided_internal_research"
+        assert series[series_id]["implementation"] == "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C"
 
 
 def test_full_entry_accepts_one_ready_package_when_prices_is_temporarily_blocked(tmp_path: Path):

@@ -260,6 +260,7 @@ def validate_canonical_v2(frame: pd.DataFrame) -> dict[str, Any]:
     checks["pit_grade_allowed"] = bool(frame["pit_grade"].isin({"A", "B", "C", "EXPLORATORY", "UNASSESSED"}).all())
     checks["license_scope_allowed"] = bool(frame["license_scope"].isin({
         "public_redistributable", "internal_research", "restricted_internal",
+        "user_provided_internal_research",
     }).all())
     checks["period_order"] = bool(
         (frame["reference_period_start"].astype(str) <= frame["reference_period_end"].astype(str)).all()

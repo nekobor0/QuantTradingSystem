@@ -18,14 +18,11 @@
     {
       "package_id": "rates_liquidity",
       "order": 1,
-      "gold_state": "GOLD_BLOCKED_PARTIAL_9_OF_11",
+      "gold_state": "GOLD_READY_11_OF_11_FULL_HISTORY_BLOCKED_CFETS",
       "gold_coverage": {
-        "ready_count": 9,
+        "ready_count": 11,
         "required_count": 11,
-        "missing_series": [
-          "CN.CHINABOND.GOV.YTM.1Y",
-          "CN.CHINABOND.GOV.YTM.10Y"
-        ]
+        "missing_series": []
       },
       "shadow_allowed": false,
       "full_history_allowed": false,
@@ -36,11 +33,40 @@
         "monthly_event",
         "event"
       ],
-      "shadow_state": "BLOCKED_GOLD_INCOMPLETE",
+      "shadow_state": "BLOCKED_FULL_HISTORY_INCOMPLETE",
       "full_blockers": [
-        "CFETS DR007/R007 historical path remains unverified",
-        "ChinaBond 1Y/10Y Gold and full history remain blocked because sufficient authorization evidence has not been obtained"
-      ]
+        "CFETS DR007/R007 requested history is incomplete: 2026-07-27 through 2026-08-12 remain unclosed"
+      ],
+      "series_history_evidence": {
+        "chinabond_government_ytm": {
+          "status": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+          "series_ids": [
+            "CN.CHINABOND.GOV.YTM.1Y",
+            "CN.CHINABOND.GOV.YTM.10Y"
+          ],
+          "history_evidence_complete": true,
+          "formal_execution_allowed": false,
+          "formal_curated_written": false,
+          "research_ready": false,
+          "full_window": {
+            "start": "2002-01-04",
+            "end": "2026-08-28",
+            "scope": "user_provided_official_annual_exports_pit_c_exploratory",
+            "observed_dates_per_series": 6159,
+            "observed_rows": 12318,
+            "pit_grade": "C"
+          },
+          "candidate_input": {
+            "root": "state/w1_rates_liquidity_evidence_luna_20260830/chinabond_ytm_full_candidate",
+            "candidate": "chinabond_ytm_full_candidate.parquet",
+            "candidate_sha256": "CD75349939256CA0A90DCC071B9B982F94D046291D27E19DFA487C188D9F5197",
+            "expected_sha256": "494F1CFF7D2CCF4A23DD27D7CCADA852C89D3B1C98CD80DC061D6C71536EE8C5",
+            "source_map_sha256": "34CAE8DDECA6B0B0A343A0E4BB5907CA7D94E7F55AC2F730830D95349D1B4EA3",
+            "manual_audit_sha256": "138BFEBDACE5492A4FEB355899C8D31A2CA13760A14C9A7B1A09EA6F180EB1A5",
+            "candidate_audit_sha256": "54739F29FAD0013926141C17770CCED71BE9E4609EEEB6F6B930843670C24A7D"
+          }
+        }
+      }
     },
     {
       "package_id": "pmi_state",

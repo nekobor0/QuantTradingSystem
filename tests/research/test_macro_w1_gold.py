@@ -10,13 +10,15 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_w1_gold_registry_has_evidence_backed_ready_and_blocked_packages():
     result = validate_registry(ROOT / "config" / "macro_w1_gold_registry.json")
     assert result["passed"], result
-    assert result["ready_packages"] == ["growth_output", "money_credit", "pmi_state", "prices"]
-    assert result["blocked_packages"] == ["rates_liquidity"]
+    assert result["ready_packages"] == ["growth_output", "money_credit", "pmi_state", "prices", "rates_liquidity"]
+    assert result["blocked_packages"] == []
     rates = result["packages"]["rates_liquidity"]
-    assert rates["status"] == "GOLD_BLOCKED_PARTIAL_9_OF_11"
-    assert rates["gold_ready_count"] == 9
+    assert rates["status"] == "GOLD_READY_11_OF_11_FULL_HISTORY_BLOCKED_CFETS"
+    assert rates["gold_ready_count"] == 11
     assert rates["gold_required_count"] == 11
-    assert rates["package_ready"] is False
+    assert rates["gold_missing"] == []
+    assert rates["full_history_blocked_series"] == ["CN.REPO.DR007", "CN.REPO.R007"]
+    assert rates["package_ready"] is True
     money = result["packages"]["money_credit"]
     assert money["status"] == "GOLD_READY_ACTIVE_6_OF_6"
     assert money["gold_ready_count"] == 6

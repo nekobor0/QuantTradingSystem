@@ -14,12 +14,14 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "data_lake"))
 
 from validate_macro_w1_rates_gold_candidate import (  # noqa: E402
+    CHINABOND_READY_SERIES,
     EXISTING_READY_SERIES,
     FULL_HISTORY_BLOCKED_SERIES,
     GOLD_MISSING_SERIES,
     NEW_READY_SERIES,
     validate_rates_gold_candidate,
 )
+from validate_macro_w1_full_entry import RATES_CHINABOND_HISTORY_EVIDENCE  # noqa: E402
 from validate_macro_w1_money_credit_afre_candidate import (  # noqa: E402
     FROZEN_HASHES as MONEY_AFRE_FROZEN_HASHES,
     SERIES_ID as MONEY_AFRE_SERIES_ID,
@@ -62,6 +64,12 @@ MONEY_AFRE_POLICY = {
     "cumulative_differencing_allowed": False,
     "balance_differencing_allowed": False,
     "methodology_version_required": True,
+}
+RATES_READY_STATUS = "GOLD_READY_11_OF_11_FULL_HISTORY_BLOCKED_CFETS"
+RATES_ALL_READY_SERIES = EXISTING_READY_SERIES | NEW_READY_SERIES | CHINABOND_READY_SERIES
+RATES_PACKAGE_CHINABOND_EVIDENCE = {
+    **{key: value for key, value in RATES_CHINABOND_HISTORY_EVIDENCE.items() if key != "full_window"},
+    "window": RATES_CHINABOND_HISTORY_EVIDENCE["full_window"],
 }
 
 
@@ -182,17 +190,19 @@ def validate_registry(registry_path: Path) -> dict[str, Any]:
         contract = _load(ROOT / "config" / "macro_w1_packages" / f"{package_id}.json")
         if package_id == "rates_liquidity":
             expected_series = {item["series_id"] for item in contract["series"]}
+            series_by_id = {item["series_id"]: item for item in contract["series"]}
             covered = set(spec["covered_series"])
             blocked = set(spec["blocked_series"])
             candidate = validate_rates_gold_candidate()
             coverage = contract.get("gold_coverage", {})
             coverage_exact = (
-                coverage.get("ready_count") == 9
+                coverage.get("ready_count") == 11
                 and coverage.get("required_count") == 11
-                and set(coverage.get("ready_series", [])) == EXISTING_READY_SERIES | NEW_READY_SERIES
+                and set(coverage.get("ready_series", [])) == RATES_ALL_READY_SERIES
                 and set(coverage.get("missing_series", [])) == GOLD_MISSING_SERIES
                 and set(contract.get("full_history_blocked_series", [])) == FULL_HISTORY_BLOCKED_SERIES
             )
+            effective_coverage = spec.get("effective_gold_coverage", {})
             registry_partition_exact = (
                 covered == EXISTING_READY_SERIES
                 and blocked == expected_series - EXISTING_READY_SERIES
@@ -202,15 +212,28 @@ def validate_registry(registry_path: Path) -> dict[str, Any]:
             checks = {
                 "legacy_gold_partition_exact": registry_partition_exact,
                 "candidate_evidence_valid": candidate["passed"],
-                "nine_of_eleven_coverage_exact": coverage_exact,
-                "package_remains_blocked": contract.get("status") == "GOLD_BLOCKED_PARTIAL_9_OF_11",
+                "effective_eleven_of_eleven_coverage_exact": coverage_exact
+                and spec.get("status") == "GOLD_READY_EFFECTIVE_11_OF_11"
+                and effective_coverage.get("ready_count") == 11
+                and effective_coverage.get("required_count") == 11
+                and set(effective_coverage.get("ready_series", [])) == RATES_ALL_READY_SERIES
+                and effective_coverage.get("missing_series") == [],
+                "package_gold_ready_but_full_history_blocked": contract.get("status") == RATES_READY_STATUS
+                and contract.get("chinabond_full_history_evidence") == RATES_PACKAGE_CHINABOND_EVIDENCE
+                and contract.get("full_history_blocked_series") == sorted(FULL_HISTORY_BLOCKED_SERIES),
+                "chinabond_series_contract_exact": all(
+                    series_by_id.get(series_id, {}).get("pit_grade") == "C"
+                    and series_by_id.get(series_id, {}).get("license_scope") == "user_provided_internal_research"
+                    and series_by_id.get(series_id, {}).get("implementation") == "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C"
+                    for series_id in CHINABOND_READY_SERIES
+                ),
                 "formal_and_research_states_false": contract.get("full_history_allowed") is False and contract.get("formal_curated_written") is False and contract.get("research_ready") is False,
             }
             failures = sorted(name for name, passed in checks.items() if not passed)
             results[package_id] = {
                 "package_id": package_id,
                 "evidence_valid": not failures,
-                "package_ready": False,
+                "package_ready": not failures,
                 "status": contract.get("status"),
                 "gold_ready_count": candidate["gold_ready_count"],
                 "gold_required_count": candidate["gold_required_count"],

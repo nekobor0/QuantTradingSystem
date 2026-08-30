@@ -2,7 +2,7 @@
   "schema_version": 2,
   "contract_id": "R011.W1.RATES_LIQUIDITY.V2",
   "package_id": "rates_liquidity",
-  "status": "GOLD_BLOCKED_PARTIAL_9_OF_11",
+  "status": "GOLD_READY_11_OF_11_FULL_HISTORY_BLOCKED_CFETS",
   "full_history_allowed": false,
   "formal_curated_written": false,
   "research_ready": false,
@@ -10,7 +10,7 @@
   "source_whitelist": ["CFETS_CHINAMONEY", "PBOC_POLICY", "CHINABOND"],
   "primary_key": ["series_id", "reference_period", "vintage_id"],
   "gold_coverage": {
-    "ready_count": 9,
+    "ready_count": 11,
     "required_count": 11,
     "ready_series": [
       "CN.SHIBOR.ON",
@@ -21,19 +21,41 @@
       "CN.PBOC.OMO.REVERSE_REPO.7D.RATE",
       "CN.PBOC.MLF.1Y.RATE",
       "CN.LPR.1Y",
-      "CN.LPR.5Y_PLUS"
-    ],
-    "missing_series": [
+      "CN.LPR.5Y_PLUS",
       "CN.CHINABOND.GOV.YTM.1Y",
       "CN.CHINABOND.GOV.YTM.10Y"
-    ]
+    ],
+    "missing_series": []
   },
   "full_history_blocked_series": [
     "CN.REPO.DR007",
-    "CN.REPO.R007",
-    "CN.CHINABOND.GOV.YTM.1Y",
-    "CN.CHINABOND.GOV.YTM.10Y"
+    "CN.REPO.R007"
   ],
+  "chinabond_full_history_evidence": {
+    "status": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "series_ids": ["CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+    "history_evidence_complete": true,
+    "formal_execution_allowed": false,
+    "formal_curated_written": false,
+    "research_ready": false,
+    "window": {
+      "start": "2002-01-04",
+      "end": "2026-08-28",
+      "scope": "user_provided_official_annual_exports_pit_c_exploratory",
+      "observed_dates_per_series": 6159,
+      "observed_rows": 12318,
+      "pit_grade": "C"
+    },
+    "candidate_input": {
+      "root": "state/w1_rates_liquidity_evidence_luna_20260830/chinabond_ytm_full_candidate",
+      "candidate": "chinabond_ytm_full_candidate.parquet",
+      "candidate_sha256": "CD75349939256CA0A90DCC071B9B982F94D046291D27E19DFA487C188D9F5197",
+      "expected_sha256": "494F1CFF7D2CCF4A23DD27D7CCADA852C89D3B1C98CD80DC061D6C71536EE8C5",
+      "source_map_sha256": "34CAE8DDECA6B0B0A343A0E4BB5907CA7D94E7F55AC2F730830D95349D1B4EA3",
+      "manual_audit_sha256": "138BFEBDACE5492A4FEB355899C8D31A2CA13760A14C9A7B1A09EA6F180EB1A5",
+      "candidate_audit_sha256": "54739F29FAD0013926141C17770CCED71BE9E4609EEEB6F6B930843670C24A7D"
+    }
+  },
   "series": [
     {"series_id":"CN.SHIBOR.ON","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_close","pit_grade":"A","license_scope":"internal_research","implementation":"FORMAL_V1"},
     {"series_id":"CN.SHIBOR.1W","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_close","pit_grade":"A","license_scope":"internal_research","implementation":"FORMAL_V1"},
@@ -44,9 +66,9 @@
     {"series_id":"CN.PBOC.MLF.1Y.RATE","source":"PBOC_POLICY","frequency":"event","unit":"percent_per_annum","measure_basis":"event","pit_grade":"A","license_scope":"internal_research","implementation":"EVENT_HISTORY_RESEARCH_BLOCKED"},
     {"series_id":"CN.LPR.1Y","source":"CFETS_CHINAMONEY","frequency":"monthly_event","unit":"percent_per_annum","measure_basis":"event","pit_grade":"A","license_scope":"internal_research","implementation":"NOT_IMPLEMENTED"},
     {"series_id":"CN.LPR.5Y_PLUS","source":"CFETS_CHINAMONEY","frequency":"monthly_event","unit":"percent_per_annum","measure_basis":"event","pit_grade":"A","license_scope":"internal_research","implementation":"NOT_IMPLEMENTED"},
-    {"series_id":"CN.CHINABOND.GOV.YTM.1Y","source":"CHINABOND","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_close","pit_grade":"B","license_scope":"restricted_internal","implementation":"LICENSE_GATE"},
-    {"series_id":"CN.CHINABOND.GOV.YTM.10Y","source":"CHINABOND","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_close","pit_grade":"B","license_scope":"restricted_internal","implementation":"LICENSE_GATE"}
+    {"series_id":"CN.CHINABOND.GOV.YTM.1Y","source":"CHINABOND","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_close","pit_grade":"C","license_scope":"user_provided_internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C"},
+    {"series_id":"CN.CHINABOND.GOV.YTM.10Y","source":"CHINABOND","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_close","pit_grade":"C","license_scope":"user_provided_internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C"}
   ],
-  "missing_policy": "sparse events remain absent; no forward-fill in canonical; CFETS empty history and license failures remain blocked",
+  "missing_policy": "sparse events remain absent; no forward-fill in canonical; CFETS DR007/R007 unresolved history remains blocked; ChinaBond retrospective manual exports remain PIT-C exploratory",
   "readiness_rule": "all source-specific gold and coverage gates pass; Sol approval required"
 }

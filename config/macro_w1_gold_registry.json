@@ -4,11 +4,17 @@
   "commit_policy": "ignored_local_market_data_never_commit",
   "packages": {
     "rates_liquidity": {
-      "status": "GOLD_BLOCKED_PARTIAL_4_OF_11",
+      "status": "GOLD_READY_EFFECTIVE_11_OF_11",
       "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_rates",
       "fixtures": ["2026-08-24", "2026-08-25"],
       "covered_series": ["CN.REPO.DR007", "CN.REPO.R007", "CN.PBOC.OMO.REVERSE_REPO.7D.RATE", "CN.PBOC.MLF.1Y.RATE"],
       "blocked_series": ["CN.SHIBOR.ON", "CN.SHIBOR.1W", "CN.SHIBOR.3M", "CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y", "CN.LPR.1Y", "CN.LPR.5Y_PLUS"],
+      "effective_gold_coverage": {
+        "ready_count": 11,
+        "required_count": 11,
+        "ready_series": ["CN.SHIBOR.ON", "CN.SHIBOR.1W", "CN.SHIBOR.3M", "CN.REPO.DR007", "CN.REPO.R007", "CN.PBOC.OMO.REVERSE_REPO.7D.RATE", "CN.PBOC.MLF.1Y.RATE", "CN.LPR.1Y", "CN.LPR.5Y_PLUS", "CN.CHINABOND.GOV.YTM.1Y", "CN.CHINABOND.GOV.YTM.10Y"],
+        "missing_series": []
+      },
       "validator": "scripts/data_lake/validate_macro_w1_rates_contract.py"
     },
     "pmi_state": {
