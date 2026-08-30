@@ -197,7 +197,10 @@
           "interpolation_allowed": false,
           "zero_fill_allowed": false,
           "forward_fill_allowed": false,
-          "blocked_series_emit_no_rows": true
+          "incomplete_series_evidence_rows_allowed": true,
+          "complete_series_gate_requires_full_window": true,
+          "partial_evidence_status": "PARTIAL_EVIDENCE_NOT_FULL_HISTORY",
+          "partial_evidence_cannot_promote_gate": true
         },
         "required_methodology_breaks": [
           "M2_2001_07_SECURITIES_MARGIN_INCLUDED",

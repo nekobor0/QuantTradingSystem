@@ -65,6 +65,10 @@ def test_frozen_money_credit_full_contract_passes() -> None:
         "allow_interpolation",
         "allow_zero_fill",
         "allow_forward_fill",
+        "disable_partial_evidence",
+        "allow_incomplete_series_gate",
+        "wrong_partial_status",
+        "restore_all_or_nothing_rule",
         "drop_methodology_break",
         "package_formal_complete",
         "afre_formal_unwritten",
@@ -109,6 +113,14 @@ def test_frozen_money_credit_full_contract_fails_closed(tmp_path: Path, mutation
         contract["candidate_rules"]["zero_fill_allowed"] = True
     elif mutation == "allow_forward_fill":
         contract["candidate_rules"]["forward_fill_allowed"] = True
+    elif mutation == "disable_partial_evidence":
+        contract["candidate_rules"]["incomplete_series_evidence_rows_allowed"] = False
+    elif mutation == "allow_incomplete_series_gate":
+        contract["candidate_rules"]["complete_series_gate_requires_full_window"] = False
+    elif mutation == "wrong_partial_status":
+        contract["candidate_rules"]["partial_evidence_status"] = "FULL_HISTORY_COMPLETE"
+    elif mutation == "restore_all_or_nothing_rule":
+        contract["candidate_rules"]["blocked_series_emit_no_rows"] = True
     elif mutation == "drop_methodology_break":
         contract["required_methodology_breaks"].pop()
     elif mutation == "package_formal_complete":

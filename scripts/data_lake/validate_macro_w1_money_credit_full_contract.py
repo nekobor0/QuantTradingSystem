@@ -110,6 +110,12 @@ def validate_money_credit_full_contract(package_path: Path, manifest_path: Path)
         and all(package_contract.get(key) is False for key in ("full_history_allowed", "formal_execution_allowed", "formal_curated_written", "research_ready")),
         "no_derived_fill": isinstance(rules, dict)
         and all(rules.get(key) is False for key in ("cumulative_differencing_allowed", "balance_differencing_allowed", "interpolation_allowed", "zero_fill_allowed", "forward_fill_allowed")),
+        "partial_evidence_fail_closed": isinstance(rules, dict)
+        and rules.get("incomplete_series_evidence_rows_allowed") is True
+        and rules.get("complete_series_gate_requires_full_window") is True
+        and rules.get("partial_evidence_status") == "PARTIAL_EVIDENCE_NOT_FULL_HISTORY"
+        and rules.get("partial_evidence_cannot_promote_gate") is True
+        and "blocked_series_emit_no_rows" not in rules,
         "methodology_versions_required": isinstance(rules, dict)
         and rules.get("methodology_version_required") is True
         and package_contract.get("required_methodology_breaks") == MONEY_PENDING_FULL_HISTORY_CONTRACT["required_methodology_breaks"],

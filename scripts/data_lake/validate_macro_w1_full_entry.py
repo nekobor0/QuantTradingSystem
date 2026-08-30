@@ -172,7 +172,10 @@ MONEY_PENDING_FULL_HISTORY_CONTRACT = {
         "interpolation_allowed": False,
         "zero_fill_allowed": False,
         "forward_fill_allowed": False,
-        "blocked_series_emit_no_rows": True,
+        "incomplete_series_evidence_rows_allowed": True,
+        "complete_series_gate_requires_full_window": True,
+        "partial_evidence_status": "PARTIAL_EVIDENCE_NOT_FULL_HISTORY",
+        "partial_evidence_cannot_promote_gate": True,
     },
     "required_methodology_breaks": [
         "M2_2001_07_SECURITIES_MARGIN_INCLUDED",
