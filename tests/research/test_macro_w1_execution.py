@@ -60,10 +60,13 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     ]
     assert packages["money_credit"]["shadow_allowed"] is False
     assert packages["money_credit"]["formal_curated_written"] is False
+    assert packages["money_credit"]["formal_state_scope"] == "package_level"
+    assert packages["money_credit"]["formal_execution_state"] == "NOT_BUILT"
     assert packages["money_credit"]["research_ready"] is False
     afre_gate = packages["money_credit"]["series_full_gates"]["CN.TSF.RMB_LOANS.FLOW"]
     assert afre_gate["full_history_allowed"] is True
-    assert afre_gate["formal_curated_written"] is False
+    assert afre_gate["formal_execution_state"] == "COMPLETE"
+    assert afre_gate["formal_curated_written"] is True
     assert afre_gate["research_ready"] is False
     assert afre_gate["full_window"] == {
         "start": "2002-01",
@@ -88,15 +91,29 @@ def test_money_contract_has_matching_series_level_afre_gate():
     package = json.loads((ROOT / "config" / "macro_w1_packages" / "money_credit.json").read_text(encoding="utf-8"))
     gate = package["afre_full_history_gate"]
     assert gate["series_id"] == "CN.TSF.RMB_LOANS.FLOW"
-    assert gate["status"] == "FULL_HISTORY_ALLOWED_WITH_EXPLAINED_STRUCTURAL_OMISSION"
+    assert gate["status"] == "FULL_HISTORY_COMPLETE_WITH_EXPLAINED_STRUCTURAL_OMISSION"
     assert gate["full_history_allowed"] is True
-    assert gate["formal_curated_written"] is False
+    assert gate["formal_execution_state"] == "COMPLETE"
+    assert gate["formal_curated_written"] is True
     assert gate["research_ready"] is False
     assert gate["window"]["calendar_rows"] == 295
     assert gate["window"]["observed_rows"] == 294
     assert gate["window"]["structural_omissions"] == ["2025-12"]
     assert gate["formal_input"]["candidate_sha256"] == "04098A0763418B5873CDA6808363805FA3ED8DB7EFB0178B25B896D621469A64"
     assert gate["formal_input"]["candidate_audit_sha256"] == "7E521148DB8C26043E0D6984722A27E585D37C4785D37040A01D5DA53B743A0C"
+    assert gate["formal_output"]["formal_curated_sha256"] == "04098A0763418B5873CDA6808363805FA3ED8DB7EFB0178B25B896D621469A64"
+    assert gate["formal_output"]["formal_audit_sha256"] == "14C6C03DD2565C3114E388AA62C0606AE4B7FADAAFEE693DDF96B436F531F619"
+    assert package["formal_curated_written"] is False
+    assert package["formal_state_scope"] == "package_level"
+    assert package["formal_execution_state"] == "NOT_BUILT"
+    assert package["pending_full_history_contract"]["calendar_rows_total"] == 1165
+    assert package["pending_full_history_contract"]["series_order"] == [
+        "CN.MONEY.M1.BALANCE",
+        "CN.MONEY.M2.BALANCE",
+        "CN.TSF.FLOW",
+        "CN.TSF.STOCK",
+        "CN.TSF.GOV_BOND.FLOW",
+    ]
     assert package["status"] == "GOLD_READY_ACTIVE_6_OF_6"
     assert package["gold_coverage"]["required_count"] == 6
     assert package["gold_coverage"]["missing_series"] == []

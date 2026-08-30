@@ -236,6 +236,43 @@ def test_money_rejects_afre_series_gate_removal(tmp_path: Path):
     assert "money_credit" in result["invalid_packages"]
 
 
+@pytest.mark.parametrize(
+    ("mutation", "value"),
+    [
+        ("contract_window", "2000-01"),
+        ("contract_rows", 319),
+        ("contract_source", ["THIRD_PARTY"]),
+        ("contract_formal_allowed", True),
+        ("contract_research_ready", True),
+        ("package_formal_state", "COMPLETE"),
+        ("series_formal_written", False),
+    ],
+)
+def test_money_rejects_full_contract_or_state_tamper(tmp_path: Path, mutation: str, value: object):
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    money = next(item for item in manifest["packages"] if item["package_id"] == "money_credit")
+    contract = money["pending_full_history_contract"]
+    if mutation == "contract_window":
+        contract["series_windows"]["CN.MONEY.M1.BALANCE"]["start"] = value
+    elif mutation == "contract_rows":
+        contract["series_windows"]["CN.MONEY.M1.BALANCE"]["calendar_rows"] = value
+    elif mutation == "contract_source":
+        contract["source_whitelist"] = value
+    elif mutation == "contract_formal_allowed":
+        contract["formal_execution_allowed"] = value
+    elif mutation == "contract_research_ready":
+        contract["research_ready"] = value
+    elif mutation == "package_formal_state":
+        money["formal_execution_state"] = value
+    else:
+        money["series_full_gates"]["CN.TSF.RMB_LOANS.FLOW"]["formal_curated_written"] = value
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "money_credit" in result["invalid_packages"]
+
+
 def test_money_afre_series_gate_does_not_promote_package_lists(tmp_path: Path):
     result = validate_full_entry(ROOT / "config" / "macro_w1_execution_manifest.json")
     assert result["passed"], result

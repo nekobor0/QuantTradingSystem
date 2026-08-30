@@ -98,8 +98,8 @@ MONEY_GOLD_COVERAGE = {
 }
 MONEY_RETIRED_SERIES = ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"]
 MONEY_FULL_BLOCKERS = [
-    "M1, M2, TSF flow, TSF stock, and TSF government-bond active-series full histories are not frozen",
-    "package-level money_credit formal aggregation is not built; only CN.TSF.RMB_LOANS.FLOW series-level formal history is complete",
+    "M1, M2, TSF flow, TSF stock, and TSF government-bond full-history contract is frozen but official evidence candidates are not accepted",
+    "package-level money_credit formal aggregation is not built; CN.TSF.RMB_LOANS.FLOW is complete only at series level",
 ]
 MONEY_AFRE_SERIES_ID = "CN.TSF.RMB_LOANS.FLOW"
 MONEY_AFRE_START = "2002-01"
@@ -120,13 +120,76 @@ MONEY_AFRE_FORMAL_INPUT = {
     "candidate_audit_sha256": "7E521148DB8C26043E0D6984722A27E585D37C4785D37040A01D5DA53B743A0C",
     "formal_curated": "curated/w1_money_credit_afre_rmb_loans_official_mixed_pit.parquet",
 }
+MONEY_AFRE_FORMAL_OUTPUT = {
+    "formal_curated": "curated/w1_money_credit_afre_rmb_loans_official_mixed_pit.parquet",
+    "formal_curated_sha256": "04098A0763418B5873CDA6808363805FA3ED8DB7EFB0178B25B896D621469A64",
+    "formal_audit": "audits/w1_money_credit_afre_full.json",
+    "formal_audit_sha256": "14C6C03DD2565C3114E388AA62C0606AE4B7FADAAFEE693DDF96B436F531F619",
+    "idempotence_verified": True,
+}
 MONEY_AFRE_SERIES_GATE = {
-    "status": "FULL_HISTORY_ALLOWED_WITH_EXPLAINED_STRUCTURAL_OMISSION",
+    "status": "FULL_HISTORY_COMPLETE_WITH_EXPLAINED_STRUCTURAL_OMISSION",
     "full_history_allowed": True,
-    "formal_curated_written": False,
+    "formal_execution_allowed": True,
+    "formal_execution_state": "COMPLETE",
+    "formal_curated_written": True,
     "research_ready": False,
     "full_window": MONEY_AFRE_FULL_WINDOW,
     "formal_input": MONEY_AFRE_FORMAL_INPUT,
+    "formal_output": MONEY_AFRE_FORMAL_OUTPUT,
+}
+MONEY_PENDING_FULL_HISTORY_CONTRACT = {
+    "status": "CONTRACT_FROZEN_AWAITING_OFFICIAL_EVIDENCE",
+    "source_whitelist": ["PBOC_STATS"],
+    "candidate_only": True,
+    "full_history_allowed": False,
+    "formal_execution_allowed": False,
+    "formal_curated_written": False,
+    "research_ready": False,
+    "primary_key": ["series_id", "reference_period", "vintage_id"],
+    "series_order": [
+        "CN.MONEY.M1.BALANCE",
+        "CN.MONEY.M2.BALANCE",
+        "CN.TSF.FLOW",
+        "CN.TSF.STOCK",
+        "CN.TSF.GOV_BOND.FLOW",
+    ],
+    "calendar_rows_total": 1165,
+    "series_windows": {
+        "CN.MONEY.M1.BALANCE": {"start": "1999-12", "end": "2026-07", "calendar_rows": 320, "unit": "100m_cny", "measure_basis": "stock"},
+        "CN.MONEY.M2.BALANCE": {"start": "1999-12", "end": "2026-07", "calendar_rows": 320, "unit": "100m_cny", "measure_basis": "stock"},
+        "CN.TSF.FLOW": {"start": "2002-01", "end": "2026-07", "calendar_rows": 295, "unit": "100m_cny", "measure_basis": "flow"},
+        "CN.TSF.STOCK": {"start": "2017-01", "end": "2026-07", "calendar_rows": 115, "unit": "trillion_cny", "measure_basis": "stock"},
+        "CN.TSF.GOV_BOND.FLOW": {"start": "2017-01", "end": "2026-07", "calendar_rows": 115, "unit": "100m_cny", "measure_basis": "flow"},
+    },
+    "candidate_rules": {
+        "period_accounting": "every calendar period must be observed, an officially evidenced structural omission, or explicitly blocked",
+        "pit_policy": "official contemporaneous release timestamp is PIT-A; retrospective official history without contemporaneous release evidence is PIT-C",
+        "vintage_policy": "attachments and comparable backcasts are immutable vintages and never overwrite earlier vintages",
+        "methodology_version_required": True,
+        "cumulative_differencing_allowed": False,
+        "balance_differencing_allowed": False,
+        "interpolation_allowed": False,
+        "zero_fill_allowed": False,
+        "forward_fill_allowed": False,
+        "blocked_series_emit_no_rows": True,
+    },
+    "required_methodology_breaks": [
+        "M2_2001_07_SECURITIES_MARGIN_INCLUDED",
+        "MONEY_2011_10_EXPANDED_DEPOSIT_SCOPE",
+        "M0_2022_12_DIGITAL_RMB_INCLUDED",
+        "FINANCIAL_STATS_2023_01_THREE_NON_DEPOSITORY_INSTITUTIONS",
+        "M1_2025_01_REVISED_SCOPE_WITH_2024_COMPARABLE_BACKCAST",
+        "TSF_2018_07_ABS_AND_LOAN_WRITEOFF_INCLUDED",
+        "TSF_2018_09_LOCAL_GOV_SPECIAL_BOND_INCLUDED",
+        "TSF_2019_09_EXCHANGE_ABS_INCLUDED_IN_CORPORATE_BONDS",
+        "TSF_2019_12_GOV_BONDS_WITH_HISTORY_BACKCAST_TO_2017_01",
+    ],
+    "candidate_output": {
+        "candidate": "shadow/w1_money_credit_core_full_candidate.parquet",
+        "candidate_audit": "audits/w1_money_credit_core_full_candidate.json",
+        "state_root": "state/w1_money_credit_core_full_candidate_luna_20260830",
+    },
 }
 MONEY_LEGACY_FULL_BLOCKER_SETS = {
     frozenset(
@@ -320,11 +383,15 @@ def _money_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
         errors.append(_blocker("MONEY_RESEARCH_READY_FORBIDDEN", "money_credit cannot be research ready"))
     if package.get("formal_curated_written") is not False:
         errors.append(_blocker("MONEY_FORMAL_WRITE_FORBIDDEN", "money_credit formal curated output must remain unwritten"))
+    if package.get("formal_state_scope") != "package_level" or package.get("formal_execution_state") != "NOT_BUILT":
+        errors.append(_blocker("MONEY_PACKAGE_FORMAL_STATE_MISMATCH", "money_credit package-level formal state must remain NOT_BUILT"))
     series_gates = package.get("series_full_gates")
     if not isinstance(series_gates, dict):
         errors.append(_blocker("MONEY_SERIES_GATES_MISSING", "money_credit series_full_gates must be an object"))
     elif series_gates != {MONEY_AFRE_SERIES_ID: MONEY_AFRE_SERIES_GATE}:
         errors.append(_blocker("MONEY_AFRE_SERIES_GATE_MISMATCH", "AFRE series-level formal gate must match the frozen 294-of-295 contract"))
+    if package.get("pending_full_history_contract") != MONEY_PENDING_FULL_HISTORY_CONTRACT:
+        errors.append(_blocker("MONEY_PENDING_FULL_CONTRACT_MISMATCH", "the five-series pending full-history contract must match the frozen mixed-window scope"))
     return errors
 
 

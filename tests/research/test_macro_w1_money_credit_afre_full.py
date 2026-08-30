@@ -145,7 +145,7 @@ def test_gate_rejects_contract_mutations(tmp_path: Path, mutation: str, code: st
     elif mutation == "series_allowed":
         gate["full_history_allowed"] = False
     elif mutation == "formal_written":
-        gate["formal_curated_written"] = True
+        gate["formal_curated_written"] = False
     elif mutation == "research_ready":
         gate["research_ready"] = True
     else:
