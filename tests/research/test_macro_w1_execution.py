@@ -41,15 +41,15 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     assert packages["rates_liquidity"]["full_history_allowed"] is False
     assert packages["rates_liquidity"]["formal_curated_written"] is False
     assert packages["rates_liquidity"]["research_ready"] is False
-    assert packages["money_credit"]["gold_state"] == "GOLD_BLOCKED_PARTIAL_6_OF_8"
+    assert packages["money_credit"]["gold_state"] == "GOLD_READY_ACTIVE_6_OF_6"
     assert packages["money_credit"]["gold_coverage"] == {
         "ready_count": 6,
-        "required_count": 8,
-        "missing_series": [
-            "CN.LOANS.RMB.FLOW",
-            "CN.LOANS.CORP.MEDIUM_LONG.FLOW",
-        ],
+        "required_count": 6,
+        "missing_series": [],
     }
+    assert packages["money_credit"]["retired_not_required_series"] == [
+        "CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"
+    ]
     assert packages["money_credit"]["shadow_allowed"] is False
     assert packages["money_credit"]["formal_curated_written"] is False
     assert packages["money_credit"]["research_ready"] is False
@@ -89,6 +89,12 @@ def test_money_contract_has_matching_series_level_afre_gate():
     assert gate["window"]["structural_omissions"] == ["2025-12"]
     assert gate["formal_input"]["candidate_sha256"] == "04098A0763418B5873CDA6808363805FA3ED8DB7EFB0178B25B896D621469A64"
     assert gate["formal_input"]["candidate_audit_sha256"] == "7E521148DB8C26043E0D6984722A27E585D37C4785D37040A01D5DA53B743A0C"
+    assert package["status"] == "GOLD_READY_ACTIVE_6_OF_6"
+    assert package["gold_coverage"]["required_count"] == 6
+    assert package["gold_coverage"]["missing_series"] == []
+    assert package["canonical_scope_policy"]["derived_replacement_implemented"] is False
+    assert package["canonical_scope_policy"]["cumulative_differencing_allowed"] is False
+    assert package["canonical_scope_policy"]["balance_differencing_allowed"] is False
 
 
 def test_full_entry_accepts_one_ready_package_when_prices_is_temporarily_blocked(tmp_path: Path):

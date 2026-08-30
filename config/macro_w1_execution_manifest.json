@@ -79,14 +79,11 @@
     {
       "package_id": "money_credit",
       "order": 4,
-      "gold_state": "GOLD_BLOCKED_PARTIAL_6_OF_8",
+      "gold_state": "GOLD_READY_ACTIVE_6_OF_6",
       "gold_coverage": {
         "ready_count": 6,
-        "required_count": 8,
-        "missing_series": [
-          "CN.LOANS.RMB.FLOW",
-          "CN.LOANS.CORP.MEDIUM_LONG.FLOW"
-        ]
+        "required_count": 6,
+        "missing_series": []
       },
       "shadow_allowed": false,
       "full_history_allowed": false,
@@ -95,10 +92,14 @@
       "frequency_groups": [
         "monthly"
       ],
-      "shadow_state": "BLOCKED_GOLD_INCOMPLETE",
+      "shadow_state": "GOLD_READY_NO_PACKAGE_SHADOW",
       "full_blockers": [
-        "CN.LOANS.RMB.FLOW lacks direct official monthly observations",
-        "CN.LOANS.CORP.MEDIUM_LONG.FLOW lacks direct official monthly observations"
+        "M1, M2, TSF flow, TSF stock, and TSF government-bond active-series full histories are not frozen",
+        "package-level money_credit formal aggregation is not built; only CN.TSF.RMB_LOANS.FLOW series-level formal history is complete"
+      ],
+      "retired_not_required_series": [
+        "CN.LOANS.RMB.FLOW",
+        "CN.LOANS.CORP.MEDIUM_LONG.FLOW"
       ],
       "series_full_gates": {
         "CN.TSF.RMB_LOANS.FLOW": {

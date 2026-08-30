@@ -1,16 +1,26 @@
 {
   "schema_version": 2,
-  "contract_id": "R011.W1.MONEY_CREDIT.V3",
+  "contract_id": "R011.W1.MONEY_CREDIT.V4",
   "package_id": "money_credit",
-  "status": "GOLD_BLOCKED_PARTIAL_6_OF_8",
-  "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10"],
+  "status": "GOLD_READY_ACTIVE_6_OF_6",
+  "accepted_decisions": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10", "W1_D11"],
   "source_whitelist": ["PBOC_STATS"],
   "primary_key": ["series_id", "reference_period", "vintage_id"],
   "gold_coverage": {
     "ready_count": 6,
-    "required_count": 8,
+    "required_count": 6,
     "ready_series": ["CN.MONEY.M1.BALANCE", "CN.MONEY.M2.BALANCE", "CN.TSF.FLOW", "CN.TSF.STOCK", "CN.TSF.GOV_BOND.FLOW", "CN.TSF.RMB_LOANS.FLOW"],
-    "missing_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"]
+    "missing_series": []
+  },
+  "canonical_scope_policy": {
+    "active_required_count": 6,
+    "retired_not_required": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"],
+    "retirement_basis": "no_direct_official_single_month_observation_under_frozen_w1_evidence_policy",
+    "tombstones_retained": true,
+    "aliases_forbidden": {"CN.LOANS.RMB.FLOW": ["CN.TSF.RMB_LOANS.FLOW"]},
+    "derived_replacement_implemented": false,
+    "cumulative_differencing_allowed": false,
+    "balance_differencing_allowed": false
   },
   "full_history_allowed": false,
   "formal_curated_written": false,
@@ -51,8 +61,8 @@
   "series": [
     {"series_id":"CN.MONEY.M1.BALANCE","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_UNIT_GATE"},
     {"series_id":"CN.MONEY.M2.BALANCE","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_UNIT_GATE"},
-    {"series_id":"CN.LOANS.RMB.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"NOT_IMPLEMENTED"},
-    {"series_id":"CN.LOANS.CORP.MEDIUM_LONG.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"DEFINITION_GATE"},
+    {"series_id":"CN.LOANS.RMB.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"RETIRED_NOT_REQUIRED_NO_DIRECT_MONTHLY_OBSERVATION","required":false},
+    {"series_id":"CN.LOANS.CORP.MEDIUM_LONG.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"RETIRED_NOT_REQUIRED_NO_DIRECT_MONTHLY_OBSERVATION","required":false},
     {"series_id":"CN.TSF.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
     {"series_id":"CN.TSF.STOCK","source":"PBOC_STATS","frequency":"monthly","unit":"trillion_cny","measure_basis":"stock","pit_grade":"A","license_scope":"internal_research","implementation":"CROSSCHECK_ONLY"},
     {"series_id":"CN.TSF.GOV_BOND.FLOW","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","measure_basis":"flow","pit_grade":"A","license_scope":"internal_research","implementation":"METHODOLOGY_GATE"},

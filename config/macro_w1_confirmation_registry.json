@@ -32,7 +32,7 @@
     {"package_id":"rates_liquidity","order":1,"series_count":11,"primary_sources":["CFETS_CHINAMONEY","PBOC_POLICY","CHINABOND"],"sample_state":"SHIBOR_IMPLEMENTED_PBOC_EVENT_HISTORY_CAPTURED_CFETS_HISTORY_BLOCKED"},
     {"package_id":"pmi_state","order":2,"series_count":8,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"TWO_IMPLEMENTED_SIX_EXISTING_CROSSCHECK_FIELDS_MAPPED"},
     {"package_id":"prices","order":3,"series_count":5,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_CROSSCHECK_MAPPED"},
-    {"package_id":"money_credit","order":4,"series_count":8,"primary_sources":["PBOC_STATS"],"sample_state":"OFFICIAL_RELEASE_AND_ATTACHMENT_SHAPES_PROBED_AFRE_RMB_LOANS_CANONICAL_AUTHORIZED"},
+    {"package_id":"money_credit","order":4,"series_count":8,"active_required_series_count":6,"retired_series_count":2,"primary_sources":["PBOC_STATS"],"sample_state":"ACTIVE_GOLD_6_OF_6_TWO_UNOBSERVABLE_LEGACY_DEFINITIONS_RETIRED"},
     {"package_id":"growth_output","order":5,"series_count":3,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_GDP_CROSSCHECK_MAPPED"}
   ],
   "sources": {
@@ -70,8 +70,8 @@
     {"id":"ppirm_yoy","canonical_id":"CN.PPIRM.ALL.YOY","package":"prices","source":"NBS_RELEASE","frequency":"monthly","unit":"percent_yoy","existing":null,"state":"NEEDS_ADAPTER"},
     {"id":"m1_balance","canonical_id":"CN.MONEY.M1.BALANCE","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":"cn_m.parquet:m1","state":"FIELD_MAPPED_UNIT_CONFIRMATION"},
     {"id":"m2_balance","canonical_id":"CN.MONEY.M2.BALANCE","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":"cn_m.parquet:m2","state":"FIELD_MAPPED_UNIT_CONFIRMATION"},
-    {"id":"rmb_loans_flow","canonical_id":"CN.LOANS.RMB.FLOW","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":null,"state":"NEEDS_ADAPTER"},
-    {"id":"corp_medium_long_loan_flow","canonical_id":"CN.LOANS.CORP.MEDIUM_LONG.FLOW","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":null,"state":"NEEDS_ADAPTER_DEFINITION_GATE"},
+    {"id":"rmb_loans_flow","canonical_id":"CN.LOANS.RMB.FLOW","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":null,"state":"RETIRED_NOT_REQUIRED_NO_DIRECT_MONTHLY_OBSERVATION"},
+    {"id":"corp_medium_long_loan_flow","canonical_id":"CN.LOANS.CORP.MEDIUM_LONG.FLOW","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":null,"state":"RETIRED_NOT_REQUIRED_NO_DIRECT_MONTHLY_OBSERVATION"},
     {"id":"tsf_flow","canonical_id":"CN.TSF.FLOW","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":"sf_month.parquet:inc_month","state":"FIELD_MAPPED"},
     {"id":"tsf_stock","canonical_id":"CN.TSF.STOCK","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"trillion_cny","existing":"sf_month.parquet:stk_endval","state":"FIELD_MAPPED"},
     {"id":"tsf_gov_bond_flow","canonical_id":"CN.TSF.GOV_BOND.FLOW","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":null,"state":"NEEDS_ADAPTER_METHODOLOGY_GATE"},
@@ -80,7 +80,7 @@
     {"id":"gdp_real_yoy","canonical_id":"CN.GDP.REAL.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"percent_yoy","existing":"cn_gdp.parquet:gdp_yoy","state":"FIELD_MAPPED"},
     {"id":"industrial_va_yoy","canonical_id":"CN.INDUSTRIAL.VA.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"monthly_with_jan_feb_joint","unit":"percent_yoy","existing":null,"state":"NEEDS_ADAPTER_PERIOD_SPAN_GATE"}
   ],
-  "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10"],
+  "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10", "W1_D11"],
   "confirmation_decisions": [
     {"id":"W1_D1","topic":"amount_units","recommended":"store official 100m_cny for GDP, money and flow series; derive trillion_cny only in feature layer"},
     {"id":"W1_D2","topic":"gdp_nominal_grain","recommended":"canonical official YTD cumulative value plus separately derived single-quarter value; never label YTD as quarter-only"},
@@ -91,6 +91,7 @@
     {"id":"W1_D7","topic":"lpr_regime","recommended":"2019-08-20 reformed LPR is the research series; pre-reform 1Y LPR is a separate non-comparable regime and 5Y+ starts in 2019"},
     {"id":"W1_D8","topic":"historical_pit","recommended":"official current history without contemporaneous release evidence is exploratory_only; research-ready windows start where release-page vintages are reconstructed"},
     {"id":"W1_D9","topic":"chinabond_usage","recommended":"internal research only, retain terms/version evidence, query in at-most-one-year windows, no raw redistribution"},
-    {"id":"W1_D10","topic":"money_credit_afre_semantic_separation","recommended":"add CN.TSF.RMB_LOANS.FLOW for the direct monthly AFRE loans-to-real-economy component; never alias it to CN.LOANS.RMB.FLOW; cumulative and balance differencing remain forbidden"}
+    {"id":"W1_D10","topic":"money_credit_afre_semantic_separation","recommended":"add CN.TSF.RMB_LOANS.FLOW for the direct monthly AFRE loans-to-real-economy component; never alias it to CN.LOANS.RMB.FLOW; cumulative and balance differencing remain forbidden"},
+    {"id":"W1_D11","topic":"money_credit_active_canonical_scope","recommended":"retire CN.LOANS.RMB.FLOW and CN.LOANS.CORP.MEDIUM_LONG.FLOW from the W1 active-required raw canonical set because no direct official single-month observations passed the frozen evidence policy; retain tombstones, forbid AFRE aliasing, and require any future derived flow to use a new method-versioned derived series"}
   ]
 }

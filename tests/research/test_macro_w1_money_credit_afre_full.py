@@ -28,7 +28,7 @@ REAL_LAKE = ROOT / "artifacts" / "macro_r011"
 def _manifest(path: Path) -> Path:
     package = {
         "package_id": "money_credit",
-        "gold_state": "GOLD_BLOCKED_PARTIAL_6_OF_8",
+        "gold_state": "GOLD_READY_ACTIVE_6_OF_6",
         "full_history_allowed": False,
         "full_blockers": ["legacy series blocker"],
         "series_full_gates": {MONEY_AFRE_SERIES_ID: MONEY_AFRE_SERIES_GATE},

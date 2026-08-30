@@ -8,7 +8,8 @@ from pathlib import Path
 
 EXPECTED = {"rates_liquidity": 11, "pmi_state": 8, "prices": 5, "money_credit": 8, "growth_output": 3}
 COMMON_DECISIONS = {f"W1_D{number}" for number in range(1, 10)}
-MONEY_DECISIONS = COMMON_DECISIONS | {"W1_D10"}
+MONEY_DECISIONS = COMMON_DECISIONS | {"W1_D10", "W1_D11"}
+MONEY_RETIRED = {"CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"}
 
 
 def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, object]:
@@ -42,6 +43,25 @@ def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, ob
     checks["package_counts_exact"] = dict(package_counts) == EXPECTED
     checks["series_union_exact"] = set(contract_series) == set(registered) and len(contract_series) == len(set(contract_series))
     checks["series_metadata_complete"] = bool(metadata_ok)
+    money = next(item for item in contracts if item["package_id"] == "money_credit")
+    money_by_id = {item["series_id"]: item for item in money["series"]}
+    scope = money.get("canonical_scope_policy", {})
+    checks["money_active_required_scope_exact"] = (
+        money.get("status") == "GOLD_READY_ACTIVE_6_OF_6"
+        and money.get("gold_coverage", {}).get("required_count") == 6
+        and money.get("gold_coverage", {}).get("missing_series") == []
+        and set(scope.get("retired_not_required", [])) == MONEY_RETIRED
+        and scope.get("tombstones_retained") is True
+        and scope.get("derived_replacement_implemented") is False
+        and scope.get("cumulative_differencing_allowed") is False
+        and scope.get("balance_differencing_allowed") is False
+        and scope.get("aliases_forbidden") == {"CN.LOANS.RMB.FLOW": ["CN.TSF.RMB_LOANS.FLOW"]}
+        and all(
+            money_by_id[series_id].get("required") is False
+            and money_by_id[series_id].get("implementation") == "RETIRED_NOT_REQUIRED_NO_DIRECT_MONTHLY_OBSERVATION"
+            for series_id in MONEY_RETIRED
+        )
+    )
     failures = sorted(name for name, passed in checks.items() if not passed)
     return {"passed": not failures, "checks": checks, "failures": failures, "package_counts": dict(package_counts)}
 

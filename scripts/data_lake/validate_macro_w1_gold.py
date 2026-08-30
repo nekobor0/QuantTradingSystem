@@ -36,11 +36,22 @@ MONEY_LEGACY_READY_SERIES = {
     "CN.TSF.GOV_BOND.FLOW",
 }
 MONEY_READY_SERIES = MONEY_LEGACY_READY_SERIES | {MONEY_AFRE_SERIES_ID}
-MONEY_MISSING_SERIES = {
+MONEY_RETIRED_SERIES = {
     "CN.LOANS.RMB.FLOW",
     "CN.LOANS.CORP.MEDIUM_LONG.FLOW",
 }
-MONEY_LEGACY_MISSING_SERIES = MONEY_MISSING_SERIES | {MONEY_AFRE_SERIES_ID}
+MONEY_LEGACY_MISSING_SERIES = MONEY_RETIRED_SERIES | {MONEY_AFRE_SERIES_ID}
+MONEY_READY_STATUS = "GOLD_READY_ACTIVE_6_OF_6"
+MONEY_CANONICAL_SCOPE_POLICY = {
+    "active_required_count": 6,
+    "retired_not_required": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"],
+    "retirement_basis": "no_direct_official_single_month_observation_under_frozen_w1_evidence_policy",
+    "tombstones_retained": True,
+    "aliases_forbidden": {"CN.LOANS.RMB.FLOW": ["CN.TSF.RMB_LOANS.FLOW"]},
+    "derived_replacement_implemented": False,
+    "cumulative_differencing_allowed": False,
+    "balance_differencing_allowed": False,
+}
 MONEY_AFRE_POLICY = {
     "series_id": "CN.TSF.RMB_LOANS.FLOW",
     "official_table": "AFRE(flow)",
@@ -80,8 +91,8 @@ def validate_package(package_id: str, spec: dict[str, Any], contract: dict[str, 
         effective_coverage = spec.get("effective_gold_coverage", {})
         checks.update(
             {
-                "money_contract_v3": contract.get("contract_id") == "R011.W1.MONEY_CREDIT.V3",
-                "legacy_five_of_eight_partition_exact": covered == MONEY_LEGACY_READY_SERIES
+                "money_contract_v4": contract.get("contract_id") == "R011.W1.MONEY_CREDIT.V4",
+                "legacy_fixture_partition_exact": covered == MONEY_LEGACY_READY_SERIES
                 and blocked == MONEY_LEGACY_MISSING_SERIES,
                 "candidate_evidence_valid": candidate["passed"],
                 "candidate_evidence_contract_exact": candidate_evidence.get("series_id") == MONEY_AFRE_SERIES_ID
@@ -93,16 +104,18 @@ def validate_package(package_id: str, spec: dict[str, Any], contract: dict[str, 
                     "manual_audit.json": MONEY_AFRE_FROZEN_HASHES["manual_audit"],
                     "candidate_audit": MONEY_AFRE_FROZEN_HASHES["candidate_audit"],
                 },
-                "six_of_eight_effective_coverage_exact": spec.get("status") == "GOLD_BLOCKED_PARTIAL_6_OF_8"
-                and contract.get("status") == "GOLD_BLOCKED_PARTIAL_6_OF_8"
+                "active_six_of_six_effective_coverage_exact": spec.get("status") == MONEY_READY_STATUS
+                and contract.get("status") == MONEY_READY_STATUS
                 and coverage.get("ready_count") == 6
-                and coverage.get("required_count") == 8
+                and coverage.get("required_count") == 6
                 and set(coverage.get("ready_series", [])) == MONEY_READY_SERIES
-                and set(coverage.get("missing_series", [])) == MONEY_MISSING_SERIES
+                and coverage.get("missing_series") == []
                 and effective_coverage.get("ready_count") == 6
-                and effective_coverage.get("required_count") == 8
+                and effective_coverage.get("required_count") == 6
                 and set(effective_coverage.get("ready_series", [])) == MONEY_READY_SERIES
-                and set(effective_coverage.get("missing_series", [])) == MONEY_MISSING_SERIES,
+                and effective_coverage.get("missing_series") == []
+                and set(spec.get("retired_not_required_series", [])) == MONEY_RETIRED_SERIES,
+                "canonical_scope_policy_exact": contract.get("canonical_scope_policy") == MONEY_CANONICAL_SCOPE_POLICY,
                 "afre_semantic_policy_exact": contract.get("afre_rmb_loans_policy") == MONEY_AFRE_POLICY,
                 "afre_series_gold_state_exact": afre_series.get("measure_basis") == "direct_afre_component_flow"
                 and afre_series.get("implementation") == "GOLD_READY_FROZEN_CANDIDATE",
@@ -143,13 +156,14 @@ def validate_package(package_id: str, spec: dict[str, Any], contract: dict[str, 
     return {
         "package_id": package_id,
         "evidence_valid": not failures,
-        "package_ready": not failures and spec["status"] == READY,
+        "package_ready": not failures and spec["status"] in {READY, MONEY_READY_STATUS},
         "status": spec["status"],
         **(
             {
                 "gold_ready_count": 6,
-                "gold_required_count": 8,
-                "gold_missing": sorted(MONEY_MISSING_SERIES),
+                "gold_required_count": 6,
+                "gold_missing": [],
+                "retired_not_required": sorted(MONEY_RETIRED_SERIES),
                 "candidate": candidate,
             }
             if package_id == "money_credit"

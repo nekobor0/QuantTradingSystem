@@ -59,15 +59,13 @@ RATES_LEGACY_FULL_BLOCKERS = {
 }
 MONEY_GOLD_COVERAGE = {
     "ready_count": 6,
-    "required_count": 8,
-    "missing_series": [
-        "CN.LOANS.RMB.FLOW",
-        "CN.LOANS.CORP.MEDIUM_LONG.FLOW",
-    ],
+    "required_count": 6,
+    "missing_series": [],
 }
+MONEY_RETIRED_SERIES = ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"]
 MONEY_FULL_BLOCKERS = [
-    "CN.LOANS.RMB.FLOW lacks direct official monthly observations",
-    "CN.LOANS.CORP.MEDIUM_LONG.FLOW lacks direct official monthly observations",
+    "M1, M2, TSF flow, TSF stock, and TSF government-bond active-series full histories are not frozen",
+    "package-level money_credit formal aggregation is not built; only CN.TSF.RMB_LOANS.FLOW series-level formal history is complete",
 ]
 MONEY_AFRE_SERIES_ID = "CN.TSF.RMB_LOANS.FLOW"
 MONEY_AFRE_START = "2002-01"
@@ -270,15 +268,17 @@ def _rates_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
 
 def _money_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
-    if package.get("gold_state") != "GOLD_BLOCKED_PARTIAL_6_OF_8":
-        errors.append(_blocker("MONEY_GOLD_STATE_MISMATCH", "money_credit Gold state must remain partial 6 of 8"))
+    if package.get("gold_state") != "GOLD_READY_ACTIVE_6_OF_6":
+        errors.append(_blocker("MONEY_GOLD_STATE_MISMATCH", "money_credit active-required Gold state must be 6 of 6"))
     if package.get("gold_coverage") != MONEY_GOLD_COVERAGE:
-        errors.append(_blocker("MONEY_GOLD_COVERAGE_MISMATCH", "money_credit Gold coverage must match the frozen 6/8 contract"))
+        errors.append(_blocker("MONEY_GOLD_COVERAGE_MISMATCH", "money_credit Gold coverage must match the active-required 6/6 contract"))
+    if package.get("retired_not_required_series") != MONEY_RETIRED_SERIES:
+        errors.append(_blocker("MONEY_RETIRED_SCOPE_MISMATCH", "money_credit must retain the two legacy definitions as retired non-required tombstones"))
     if package.get("full_history_allowed") is not False:
         errors.append(_blocker("MONEY_FULL_HISTORY_NOT_BLOCKED", "money_credit full history must remain disallowed"))
     if package.get("full_blockers") != MONEY_FULL_BLOCKERS:
         errors.append(_blocker("MONEY_FULL_BLOCKERS_MISMATCH", "money_credit must retain the exact total-loan and AFRE full-history blockers"))
-    if package.get("shadow_allowed") is not False or package.get("shadow_state") != "BLOCKED_GOLD_INCOMPLETE":
+    if package.get("shadow_allowed") is not False or package.get("shadow_state") != "GOLD_READY_NO_PACKAGE_SHADOW":
         errors.append(_blocker("MONEY_SHADOW_STATE_INVALID", "money_credit shadow execution must remain blocked"))
     if package.get("research_ready") is not False:
         errors.append(_blocker("MONEY_RESEARCH_READY_FORBIDDEN", "money_credit cannot be research ready"))
@@ -306,8 +306,8 @@ def check_money_afre_full_gate_v2(
         return errors
     if package.get("full_history_allowed") is not False:
         errors.append(_blocker("MONEY_PACKAGE_GATE_MUST_REMAIN_BLOCKED", "money_credit package-level full-history gate must remain closed"))
-    if package.get("gold_state") != "GOLD_BLOCKED_PARTIAL_6_OF_8":
-        errors.append(_blocker("MONEY_GOLD_STATE_MISMATCH", "money_credit Gold state must remain partial 6 of 8"))
+    if package.get("gold_state") != "GOLD_READY_ACTIVE_6_OF_6":
+        errors.append(_blocker("MONEY_GOLD_STATE_MISMATCH", "money_credit active-required Gold state must be 6 of 6"))
     series_gates = package.get("series_full_gates")
     if not isinstance(series_gates, dict):
         errors.append(_blocker("MONEY_SERIES_GATES_MISSING", "money_credit series_full_gates must be an object"))
@@ -459,7 +459,8 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
         "ready_packages_have_valid_gate": all(package_id not in invalid_packages for package_id in ready_packages),
         "blocked_packages_have_explicit_blockers": all(package_id not in invalid_packages for package_id in blocked_packages),
         "three_shadow_passed": sum(isinstance(item, dict) and item.get("shadow_state") == "SHADOW_PASSED_SOL_REVIEW" for item in packages) == 3 if isinstance(packages, list) else False,
-        "two_gold_blocked": sum(isinstance(item, dict) and item.get("shadow_state") == "BLOCKED_GOLD_INCOMPLETE" for item in packages) == 2 if isinstance(packages, list) else False,
+        "one_gold_blocked": sum(isinstance(item, dict) and item.get("shadow_state") == "BLOCKED_GOLD_INCOMPLETE" for item in packages) == 1 if isinstance(packages, list) else False,
+        "money_gold_ready_without_package_shadow": sum(isinstance(item, dict) and item.get("shadow_state") == "GOLD_READY_NO_PACKAGE_SHADOW" for item in packages) == 1 if isinstance(packages, list) else False,
     }
     audits: dict[str, Any] = {}
     execution_pending_packages: list[str] = []

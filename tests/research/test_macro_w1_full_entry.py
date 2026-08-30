@@ -229,3 +229,14 @@ def test_money_rejects_afre_gold_coverage_rollback(tmp_path: Path):
     result = validate_full_entry(path)
     assert not result["passed"]
     assert "money_credit" in result["invalid_packages"]
+
+
+def test_money_rejects_retired_tombstone_scope_tamper(tmp_path: Path):
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    money = next(item for item in manifest["packages"] if item["package_id"] == "money_credit")
+    money["retired_not_required_series"] = []
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "money_credit" in result["invalid_packages"]

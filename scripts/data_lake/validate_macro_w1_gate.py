@@ -32,7 +32,7 @@ def validate(registry_path: Path, universe_path: Path) -> dict[str, object]:
             registry["status"] == "DECISIONS_CONFIRMED"
             and registry["policies"]["human_confirmation_complete"]
             and not registry["policies"]["no_full_backfill_before_human_confirmation"]
-            and registry["confirmed_decision_ids"] == [f"W1_D{number}" for number in range(1, 11)]
+            and registry["confirmed_decision_ids"] == [f"W1_D{number}" for number in range(1, 12)]
             and decision_ids == registry["confirmed_decision_ids"]
         ),
         "rates_remain_shadow_only": registry["policies"]["rates_shadow_only_before_sol_review"],

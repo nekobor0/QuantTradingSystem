@@ -40,12 +40,13 @@
       }
     },
     "money_credit": {
-      "status": "GOLD_BLOCKED_PARTIAL_6_OF_8",
+      "status": "GOLD_READY_ACTIVE_6_OF_6",
       "fixture_root": "artifacts/macro_r011/gold_fixtures/w1_money_credit",
       "fixtures": ["2026-06", "2026-07"],
       "required_files": ["pboc_money_supply.htm", "pboc_tsf_flow.htm", "pboc_tsf_stock.htm", "expected.json", "checksums.json"],
       "covered_series": ["CN.MONEY.M1.BALANCE", "CN.MONEY.M2.BALANCE", "CN.TSF.FLOW", "CN.TSF.STOCK", "CN.TSF.GOV_BOND.FLOW"],
       "blocked_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW", "CN.TSF.RMB_LOANS.FLOW"],
+      "retired_not_required_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"],
       "candidate_evidence": {
         "series_id": "CN.TSF.RMB_LOANS.FLOW",
         "candidate_root": "artifacts/macro_r011/gold_fixtures/w1_money_credit_candidate_v3",
@@ -59,11 +60,11 @@
       },
       "effective_gold_coverage": {
         "ready_count": 6,
-        "required_count": 8,
+        "required_count": 6,
         "ready_series": ["CN.MONEY.M1.BALANCE", "CN.MONEY.M2.BALANCE", "CN.TSF.FLOW", "CN.TSF.STOCK", "CN.TSF.GOV_BOND.FLOW", "CN.TSF.RMB_LOANS.FLOW"],
-        "missing_series": ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"]
+        "missing_series": []
       },
-      "blocker": "The two total-loan series lack direct monthly observations, and AFRE RMB-loans attachment-vintage full-history discovery is not implemented. Generic cumulative or balance differencing remains forbidden.",
+      "blocker": "Gold is complete for the six active-required series. The two unobservable legacy definitions are retained only as retired tombstones; package full-history work remains separate. Generic cumulative or balance differencing remains forbidden.",
       "official_urls": {
         "2026-06": ["https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081416590597261.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417010772070.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417011913181.htm"],
         "2026-07": ["https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081416590597261.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417010772070.htm", "https://www.pbc.gov.cn/diaochatongjisi/attachDir/2026/08/2026081417011913181.htm"]
