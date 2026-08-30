@@ -97,9 +97,34 @@
       ],
       "shadow_state": "BLOCKED_GOLD_INCOMPLETE",
       "full_blockers": [
-        "two monthly total-loan flow definitions lack direct official observations",
-        "AFRE RMB-loans attachment-vintage full-history discovery is not implemented"
-      ]
+        "CN.LOANS.RMB.FLOW lacks direct official monthly observations",
+        "CN.LOANS.CORP.MEDIUM_LONG.FLOW lacks direct official monthly observations"
+      ],
+      "series_full_gates": {
+        "CN.TSF.RMB_LOANS.FLOW": {
+          "status": "FULL_HISTORY_ALLOWED_WITH_EXPLAINED_STRUCTURAL_OMISSION",
+          "full_history_allowed": true,
+          "formal_curated_written": false,
+          "research_ready": false,
+          "full_window": {
+            "start": "2002-01",
+            "end": "2026-07",
+            "scope": "official_direct_monthly_observations_with_explained_source_structural_omission",
+            "calendar_rows": 295,
+            "observed_rows": 294,
+            "structural_omissions": [
+              "2025-12"
+            ]
+          },
+          "formal_input": {
+            "candidate": "shadow/w1_money_credit_afre_full_candidate.parquet",
+            "candidate_sha256": "04098A0763418B5873CDA6808363805FA3ED8DB7EFB0178B25B896D621469A64",
+            "candidate_audit": "audits/w1_money_credit_afre_full_candidate.json",
+            "candidate_audit_sha256": "7E521148DB8C26043E0D6984722A27E585D37C4785D37040A01D5DA53B743A0C",
+            "formal_curated": "curated/w1_money_credit_afre_rmb_loans_official_mixed_pit.parquet"
+          }
+        }
+      }
     },
     {
       "package_id": "growth_output",

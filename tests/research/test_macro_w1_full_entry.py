@@ -199,15 +199,24 @@ def test_money_rejects_premature_promotion(tmp_path: Path, field: str, value: ob
     assert "money_credit" in result["invalid_packages"]
 
 
-def test_money_rejects_afre_full_history_blocker_removal(tmp_path: Path):
+def test_money_rejects_afre_series_gate_removal(tmp_path: Path):
     manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
     money = next(item for item in manifest["packages"] if item["package_id"] == "money_credit")
-    money["full_blockers"] = [item for item in money["full_blockers"] if "AFRE" not in item]
+    money["series_full_gates"] = {}
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(manifest), encoding="utf-8")
     result = validate_full_entry(path)
     assert not result["passed"]
     assert "money_credit" in result["invalid_packages"]
+
+
+def test_money_afre_series_gate_does_not_promote_package_lists(tmp_path: Path):
+    result = validate_full_entry(ROOT / "config" / "macro_w1_execution_manifest.json")
+    assert result["passed"], result
+    assert result["ready_packages"] == ["pmi_state", "prices", "growth_output"]
+    assert result["blocked_packages"] == ["rates_liquidity", "money_credit"]
+    assert result["execution_pending_packages"] == []
+    assert result["full_history_complete_packages"] == []
 
 
 def test_money_rejects_afre_gold_coverage_rollback(tmp_path: Path):

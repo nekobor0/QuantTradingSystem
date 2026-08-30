@@ -23,11 +23,15 @@ from scripts.data_lake.run_macro_w1_prices_full import run_full as run_prices_fu
 from scripts.data_lake.run_macro_w1_growth_output_enablement import run_bounded_candidate
 from scripts.data_lake.run_macro_w1_growth_output_full import check_full_gate as check_growth_full_gate
 from scripts.data_lake.run_macro_w1_growth_output_full import run_full as run_growth_full
+from scripts.data_lake.run_macro_w1_money_credit_afre_full import check_full_gate as check_money_afre_full_gate
+from scripts.data_lake.run_macro_w1_money_credit_afre_full import run_full as run_money_afre_full
+from scripts.data_lake.validate_macro_w1_full_entry import MONEY_AFRE_SERIES_ID
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package", required=True)
+    parser.add_argument("--series")
     parser.add_argument("--mode", choices=("gold", "shadow", "full"), required=True)
     parser.add_argument("--start", required=True)
     parser.add_argument("--end", required=True)
@@ -42,11 +46,14 @@ def main() -> None:
         raise SystemExit(f"unknown package: {args.package}")
     gold = validate_registry(ROOT / "config" / "macro_w1_gold_registry.json")["packages"][args.package]
     blockers: list[dict[str, str]] = []
-    if args.mode != "gold" and not gold["package_ready"]:
+    money_afre_full = args.package == "money_credit" and args.mode == "full" and args.series == MONEY_AFRE_SERIES_ID
+    if args.series is not None and not money_afre_full:
+        blockers.append({"code": "SERIES_DISPATCH_NOT_ALLOWED", "detail": args.series})
+    if args.mode != "gold" and not gold["package_ready"] and not money_afre_full:
         blockers.append({"code": "GOLD_NOT_READY", "detail": package["gold_state"]})
     if args.mode == "shadow" and not package["shadow_allowed"]:
         blockers.append({"code": "SHADOW_NOT_ALLOWED", "detail": "execution manifest gate"})
-    if args.mode == "full" and not package["full_history_allowed"]:
+    if args.mode == "full" and not package["full_history_allowed"] and not money_afre_full:
         blockers.extend(
             {"code": "FULL_HISTORY_NOT_ALLOWED", "detail": detail}
             for detail in package["full_blockers"]
@@ -57,6 +64,18 @@ def main() -> None:
         blockers.extend(check_pmi_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
     if args.package == "growth_output" and args.mode == "full" and not blockers:
         blockers.extend(check_growth_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
+    if money_afre_full and not blockers:
+        blockers.extend(check_money_afre_full_gate(ROOT / "config" / "macro_w1_execution_manifest.json", args.start, args.end))
+    if money_afre_full and not blockers:
+        result = run_money_afre_full(
+            args.output_root,
+            args.start,
+            args.end,
+            "execute",
+            authorize_execute=args.authorize_formal_write,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        raise SystemExit(2 if result.get("blocked") else 0)
     if args.package == "pmi_state" and args.mode == "full" and not blockers:
         result = run_pmi_full(args.output_root, args.start, args.end, "execute")
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))

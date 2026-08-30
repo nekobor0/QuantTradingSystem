@@ -53,6 +53,18 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     assert packages["money_credit"]["shadow_allowed"] is False
     assert packages["money_credit"]["formal_curated_written"] is False
     assert packages["money_credit"]["research_ready"] is False
+    afre_gate = packages["money_credit"]["series_full_gates"]["CN.TSF.RMB_LOANS.FLOW"]
+    assert afre_gate["full_history_allowed"] is True
+    assert afre_gate["formal_curated_written"] is False
+    assert afre_gate["research_ready"] is False
+    assert afre_gate["full_window"] == {
+        "start": "2002-01",
+        "end": "2026-07",
+        "scope": "official_direct_monthly_observations_with_explained_source_structural_omission",
+        "calendar_rows": 295,
+        "observed_rows": 294,
+        "structural_omissions": ["2025-12"],
+    }
     assert {key for key, item in packages.items() if item["shadow_state"] == "SHADOW_PASSED_SOL_REVIEW"} == {
         "pmi_state", "prices", "growth_output"
     }
@@ -62,6 +74,21 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     assert result["blocked_packages"] == ["rates_liquidity", "money_credit"]
     assert result["invalid_packages"] == []
     assert result["all_packages_ready"] is False
+
+
+def test_money_contract_has_matching_series_level_afre_gate():
+    package = json.loads((ROOT / "config" / "macro_w1_packages" / "money_credit.json").read_text(encoding="utf-8"))
+    gate = package["afre_full_history_gate"]
+    assert gate["series_id"] == "CN.TSF.RMB_LOANS.FLOW"
+    assert gate["status"] == "FULL_HISTORY_ALLOWED_WITH_EXPLAINED_STRUCTURAL_OMISSION"
+    assert gate["full_history_allowed"] is True
+    assert gate["formal_curated_written"] is False
+    assert gate["research_ready"] is False
+    assert gate["window"]["calendar_rows"] == 295
+    assert gate["window"]["observed_rows"] == 294
+    assert gate["window"]["structural_omissions"] == ["2025-12"]
+    assert gate["formal_input"]["candidate_sha256"] == "04098A0763418B5873CDA6808363805FA3ED8DB7EFB0178B25B896D621469A64"
+    assert gate["formal_input"]["candidate_audit_sha256"] == "7E521148DB8C26043E0D6984722A27E585D37C4785D37040A01D5DA53B743A0C"
 
 
 def test_full_entry_accepts_one_ready_package_when_prices_is_temporarily_blocked(tmp_path: Path):

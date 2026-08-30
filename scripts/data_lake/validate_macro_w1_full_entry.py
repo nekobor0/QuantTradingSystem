@@ -66,9 +66,36 @@ MONEY_GOLD_COVERAGE = {
     ],
 }
 MONEY_FULL_BLOCKERS = [
-    "two monthly total-loan flow definitions lack direct official observations",
-    "AFRE RMB-loans attachment-vintage full-history discovery is not implemented",
+    "CN.LOANS.RMB.FLOW lacks direct official monthly observations",
+    "CN.LOANS.CORP.MEDIUM_LONG.FLOW lacks direct official monthly observations",
 ]
+MONEY_AFRE_SERIES_ID = "CN.TSF.RMB_LOANS.FLOW"
+MONEY_AFRE_START = "2002-01"
+MONEY_AFRE_END = "2026-07"
+MONEY_AFRE_SCOPE = "official_direct_monthly_observations_with_explained_source_structural_omission"
+MONEY_AFRE_FULL_WINDOW = {
+    "start": MONEY_AFRE_START,
+    "end": MONEY_AFRE_END,
+    "scope": MONEY_AFRE_SCOPE,
+    "calendar_rows": 295,
+    "observed_rows": 294,
+    "structural_omissions": ["2025-12"],
+}
+MONEY_AFRE_FORMAL_INPUT = {
+    "candidate": "shadow/w1_money_credit_afre_full_candidate.parquet",
+    "candidate_sha256": "04098A0763418B5873CDA6808363805FA3ED8DB7EFB0178B25B896D621469A64",
+    "candidate_audit": "audits/w1_money_credit_afre_full_candidate.json",
+    "candidate_audit_sha256": "7E521148DB8C26043E0D6984722A27E585D37C4785D37040A01D5DA53B743A0C",
+    "formal_curated": "curated/w1_money_credit_afre_rmb_loans_official_mixed_pit.parquet",
+}
+MONEY_AFRE_SERIES_GATE = {
+    "status": "FULL_HISTORY_ALLOWED_WITH_EXPLAINED_STRUCTURAL_OMISSION",
+    "full_history_allowed": True,
+    "formal_curated_written": False,
+    "research_ready": False,
+    "full_window": MONEY_AFRE_FULL_WINDOW,
+    "formal_input": MONEY_AFRE_FORMAL_INPUT,
+}
 MONEY_LEGACY_FULL_BLOCKER_SETS = {
     frozenset(
         {
@@ -257,6 +284,43 @@ def _money_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
         errors.append(_blocker("MONEY_RESEARCH_READY_FORBIDDEN", "money_credit cannot be research ready"))
     if package.get("formal_curated_written") is not False:
         errors.append(_blocker("MONEY_FORMAL_WRITE_FORBIDDEN", "money_credit formal curated output must remain unwritten"))
+    series_gates = package.get("series_full_gates")
+    if not isinstance(series_gates, dict):
+        errors.append(_blocker("MONEY_SERIES_GATES_MISSING", "money_credit series_full_gates must be an object"))
+    elif series_gates != {MONEY_AFRE_SERIES_ID: MONEY_AFRE_SERIES_GATE}:
+        errors.append(_blocker("MONEY_AFRE_SERIES_GATE_MISMATCH", "AFRE series-level formal gate must match the frozen 294-of-295 contract"))
+    return errors
+
+
+def check_money_afre_full_gate_v2(
+    manifest_path: Path,
+    start: str = MONEY_AFRE_START,
+    end: str = MONEY_AFRE_END,
+) -> list[dict[str, str]]:
+    manifest, errors = _read_gate_manifest(manifest_path)
+    if manifest is None:
+        return errors
+    package, package_errors = _find_package(manifest, "money_credit")
+    errors.extend(package_errors)
+    if package is None:
+        return errors
+    if package.get("full_history_allowed") is not False:
+        errors.append(_blocker("MONEY_PACKAGE_GATE_MUST_REMAIN_BLOCKED", "money_credit package-level full-history gate must remain closed"))
+    if package.get("gold_state") != "GOLD_BLOCKED_PARTIAL_6_OF_8":
+        errors.append(_blocker("MONEY_GOLD_STATE_MISMATCH", "money_credit Gold state must remain partial 6 of 8"))
+    series_gates = package.get("series_full_gates")
+    if not isinstance(series_gates, dict):
+        errors.append(_blocker("MONEY_SERIES_GATES_MISSING", "money_credit series_full_gates must be an object"))
+        return errors
+    gate = series_gates.get(MONEY_AFRE_SERIES_ID)
+    if not isinstance(gate, dict):
+        errors.append(_blocker("MONEY_AFRE_SERIES_GATE_MISSING", f"{MONEY_AFRE_SERIES_ID} series gate is missing"))
+        return errors
+    if gate != MONEY_AFRE_SERIES_GATE:
+        code = "FORMAL_TARGET_MISMATCH" if gate.get("formal_input", {}).get("formal_curated") != MONEY_AFRE_FORMAL_INPUT["formal_curated"] else "MONEY_AFRE_SERIES_GATE_MISMATCH"
+        errors.append(_blocker(code, "AFRE series-level formal gate must match the frozen 294-of-295 contract"))
+    if start != MONEY_AFRE_START or end != MONEY_AFRE_END:
+        errors.append(_blocker("FULL_WINDOW_OUT_OF_RANGE", f"AFRE formal execution requires exact window {MONEY_AFRE_START}..{MONEY_AFRE_END}"))
     return errors
 
 
