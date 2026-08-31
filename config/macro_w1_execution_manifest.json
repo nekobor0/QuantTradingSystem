@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "gate_version": 2,
-  "as_of": "2026-08-29",
+  "as_of": "2026-08-31",
   "state_machine": [
     "CONTRACT_FROZEN",
     "GOLD_READY_SHADOW_ONLY",
@@ -336,6 +336,16 @@
         "publication_lag_pending_series": ["US.EFFR", "US.SOFR", "US.BROAD_DOLLAR"],
         "structural_omission_series": ["US.TREASURY.3M"],
         "official_calendar_exception_series": ["US.EFFR"]
+      },
+      "us_prospective_pit_evidence": {
+        "status": "SOL_ACCEPTED_PIT_B_PROSPECTIVE_ONLY_7_US_SNAPSHOTS",
+        "scope": "captured_snapshots_only_no_historical_promotion",
+        "pit_counts": {"PIT-A": 0, "PIT-B_PROSPECTIVE_ONLY": 7, "PIT-C": 0},
+        "history_rows_promoted": 0,
+        "gate_promotion": false,
+        "evidence_matrix_sha256": "67B792AB2DF6063DC05D9F5CD192DDD8EC6FD5C0F000F7AC3D9DE8434C48579C",
+        "candidate_audit_sha256": "3B89CE8ABD77A96A133A79F3F1ACB2C7DE33A0AA49444815344B081A432C457D",
+        "raw_manifest_sha256": "7A4C7066363EADC5CBACA9E05A2B30A3E545F86F19A7B6A3E1A7A65BF20C85FB"
       },
       "series_full_gates": {
         "US.EFFR": "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",

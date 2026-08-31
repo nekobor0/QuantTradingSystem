@@ -3,7 +3,7 @@
   "contract_id": "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1",
   "package_id": "global_financial_conditions",
   "status": "GOLD_BLOCKED_PARTIAL_7_OF_9",
-  "accepted_decisions": ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4", "GFC_D5"],
+  "accepted_decisions": ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4", "GFC_D5", "GFC_D6"],
   "independent_from": ["rates_liquidity"],
   "source_whitelist": ["NYFED_MARKETS", "US_TREASURY", "FEDERAL_RESERVE_H10", "CFETS_CHINAMONEY"],
   "primary_key": ["series_id", "reference_period", "vintage_id"],
@@ -86,6 +86,25 @@
       "raw_manifest.json": "14B40F83AD4460262C056A4FC0D39B8DF877FFC0D1B39972ED969640720FC695"
     }
   },
+  "us_prospective_pit_evidence": {
+    "status": "SOL_ACCEPTED_PIT_B_PROSPECTIVE_ONLY_7_US_SNAPSHOTS",
+    "scope": "captured_snapshots_only_no_historical_promotion",
+    "series": ["US.EFFR", "US.SOFR", "US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR"],
+    "pit_counts": {"PIT-A": 0, "PIT-B_PROSPECTIVE_ONLY": 7, "PIT-C": 0},
+    "release_at": null,
+    "available_at_basis": "completed official-response retrieval timestamp in UTC",
+    "vintage_status": "observed_snapshot_only_initial_or_revised_status_not_proven",
+    "history_rows_promoted": 0,
+    "gate_promotion": false,
+    "frozen_sha256": {
+      "evidence_matrix.json": "67B792AB2DF6063DC05D9F5CD192DDD8EC6FD5C0F000F7AC3D9DE8434C48579C",
+      "request_evidence_log.json": "833D04D43E9C031E767B1F71E26071A9100A18FDABC456EDF860870AFF4A8658",
+      "reverse_validation.json": "1C93999D22D9E6AD45300D7C3A75BDF583B4E6C1C002D9D6E204741EA266D474",
+      "source_map.json": "B62EE8340DE33EE1323BC6849DC95BF572ACA5F99B9FB33499E948EFFEE0B7FE",
+      "candidate_audit": "3B89CE8ABD77A96A133A79F3F1ACB2C7DE33A0AA49444815344B081A432C457D",
+      "raw_manifest.json": "7A4C7066363EADC5CBACA9E05A2B30A3E545F86F19A7B6A3E1A7A65BF20C85FB"
+    }
+  },
   "series_full_gates": {
     "US.EFFR": {"status":"AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"release_aware_as_of","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
     "US.SOFR": {"status":"AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"release_aware_as_of","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
@@ -121,6 +140,11 @@
     "release_at_rule": "store the official publication timestamp when directly evidenced; otherwise null",
     "available_at_rule": "first timestamp the captured official vintage was observable to the researcher",
     "tradable_at_rule": "not earlier than available_at and aligned to the next eligible strategy decision time",
+    "pit_b_prospective_only_rule": "an immutable official snapshot with completed-response retrieval recorded as available_at; usable only at or after a holiday-aware tradable_at; proves neither earlier availability nor initial/revised status and never promotes history",
+    "retrieval_timestamp_rule": "available_at uses completed response retrieval in UTC; requested_at and HTTP Date are transport evidence only",
+    "schedule_evidence_rule": "official approximate or fixed schedules describe expected publication timing but never by themselves establish an observation release_at",
+    "observed_vintage_rule": "label a capture as observed_snapshot unless direct evidence proves initial or revised status; every later changed capture receives a distinct immutable vintage_id and never overwrites",
+    "tradable_calendar_rule": "next eligible strategy decision time requires the official holiday and trading calendar; naive next-weekday logic is insufficient",
     "retrospective_history_without_release_evidence": "PIT_C_EXPLORATORY_ONLY",
     "nyfed_initial_publication": {"EFFR":"approximately 09:00 America/New_York on the next NYFed business day","SOFR":"approximately 08:00 America/New_York on the next SIFMA business day"},
     "nyfed_revision_cutoff": "approximately 14:30 America/New_York on the publication day; initial and revised observations require distinct immutable vintages",

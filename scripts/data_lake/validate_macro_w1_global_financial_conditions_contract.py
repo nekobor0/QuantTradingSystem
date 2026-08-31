@@ -36,7 +36,7 @@ LAYERS = {
     "FXConstraint": ["USD.CNY", "USD.CNH"],
 }
 SOURCES = ["NYFED_MARKETS", "US_TREASURY", "FEDERAL_RESERVE_H10", "CFETS_CHINAMONEY"]
-DECISIONS = ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4", "GFC_D5"]
+DECISIONS = ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4", "GFC_D5", "GFC_D6"]
 WINDOWS = {
     "US.EFFR": ("2000-07-03", "nyfed_unsecured_reference_rate_business_days"),
     "US.SOFR": ("2018-04-02", "sifma_us_government_securities_business_days"),
@@ -123,6 +123,14 @@ US_FULL_EVIDENCE_SUMMARY = {
     "publication_lag_pending_series": ["US.EFFR", "US.SOFR", "US.BROAD_DOLLAR"],
     "structural_omission_series": ["US.TREASURY.3M"],
     "official_calendar_exception_series": ["US.EFFR"],
+}
+PROSPECTIVE_EVIDENCE_HASHES = {
+    "evidence_matrix.json": "67B792AB2DF6063DC05D9F5CD192DDD8EC6FD5C0F000F7AC3D9DE8434C48579C",
+    "request_evidence_log.json": "833D04D43E9C031E767B1F71E26071A9100A18FDABC456EDF860870AFF4A8658",
+    "reverse_validation.json": "1C93999D22D9E6AD45300D7C3A75BDF583B4E6C1C002D9D6E204741EA266D474",
+    "source_map.json": "B62EE8340DE33EE1323BC6849DC95BF572ACA5F99B9FB33499E948EFFEE0B7FE",
+    "candidate_audit": "3B89CE8ABD77A96A133A79F3F1ACB2C7DE33A0AA49444815344B081A432C457D",
+    "raw_manifest.json": "7A4C7066363EADC5CBACA9E05A2B30A3E545F86F19A7B6A3E1A7A65BF20C85FB",
 }
 SERIES_GATE_STATUS = {
     series_id: (
@@ -217,6 +225,11 @@ def validate_global_financial_conditions_contract(
             "release_at_rule",
             "available_at_rule",
             "tradable_at_rule",
+            "pit_b_prospective_only_rule",
+            "retrieval_timestamp_rule",
+            "schedule_evidence_rule",
+            "observed_vintage_rule",
+            "tradable_calendar_rule",
             "retrospective_history_without_release_evidence",
             "nyfed_initial_publication",
             "nyfed_revision_cutoff",
@@ -226,7 +239,13 @@ def validate_global_financial_conditions_contract(
             "usd_cnh_publication",
             "cross_market_alignment",
         )
-    ) and pit.get("retrospective_history_without_release_evidence") == "PIT_C_EXPLORATORY_ONLY" and pit.get("nyfed_initial_publication") == {
+    ) and all(pit.get(key) == value for key, value in {
+        "pit_b_prospective_only_rule": "an immutable official snapshot with completed-response retrieval recorded as available_at; usable only at or after a holiday-aware tradable_at; proves neither earlier availability nor initial/revised status and never promotes history",
+        "retrieval_timestamp_rule": "available_at uses completed response retrieval in UTC; requested_at and HTTP Date are transport evidence only",
+        "schedule_evidence_rule": "official approximate or fixed schedules describe expected publication timing but never by themselves establish an observation release_at",
+        "observed_vintage_rule": "label a capture as observed_snapshot unless direct evidence proves initial or revised status; every later changed capture receives a distinct immutable vintage_id and never overwrites",
+        "tradable_calendar_rule": "next eligible strategy decision time requires the official holiday and trading calendar; naive next-weekday logic is insufficient",
+    }.items()) and pit.get("retrospective_history_without_release_evidence") == "PIT_C_EXPLORATORY_ONLY" and pit.get("nyfed_initial_publication") == {
         "EFFR": "approximately 09:00 America/New_York on the next NYFed business day",
         "SOFR": "approximately 08:00 America/New_York on the next SIFMA business day",
     } and pit.get("nyfed_revision_cutoff") == "approximately 14:30 America/New_York on the publication day; initial and revised observations require distinct immutable vintages"
@@ -261,6 +280,20 @@ def validate_global_financial_conditions_contract(
                 for series_id in READY_SERIES)
         and fx_evidence == FX_BLOCKED_EVIDENCE
     )
+    prospective_evidence = package.get("us_prospective_pit_evidence")
+    prospective_evidence_exact = (
+        isinstance(prospective_evidence, dict)
+        and prospective_evidence.get("status") == "SOL_ACCEPTED_PIT_B_PROSPECTIVE_ONLY_7_US_SNAPSHOTS"
+        and prospective_evidence.get("scope") == "captured_snapshots_only_no_historical_promotion"
+        and prospective_evidence.get("series") == READY_SERIES
+        and prospective_evidence.get("pit_counts") == {"PIT-A": 0, "PIT-B_PROSPECTIVE_ONLY": 7, "PIT-C": 0}
+        and prospective_evidence.get("release_at") is None
+        and prospective_evidence.get("available_at_basis") == "completed official-response retrieval timestamp in UTC"
+        and prospective_evidence.get("vintage_status") == "observed_snapshot_only_initial_or_revised_status_not_proven"
+        and prospective_evidence.get("history_rows_promoted") == 0
+        and prospective_evidence.get("gate_promotion") is False
+        and prospective_evidence.get("frozen_sha256") == PROSPECTIVE_EVIDENCE_HASHES
+    )
     series_gates = package.get("series_full_gates")
     full_evidence = package.get("us_full_history_evidence")
     series_full_evidence_exact = (
@@ -281,7 +314,8 @@ def validate_global_financial_conditions_contract(
         and full_evidence.get("official_calendar_exceptions", {}).get("US.EFFR", [{}])[0].get("reference_period") == "2003-07-20"
     )
     manifest_exact = (
-        len(manifest_matches) == 1
+        manifest.get("as_of") == "2026-08-31"
+        and len(manifest_matches) == 1
         and manifest_package.get("order") == 6
         and manifest_package.get("gold_state") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
         and manifest_package.get("gold_coverage") == {"ready_count": 7, "required_count": 9, "missing_series": MISSING_SERIES}
@@ -298,6 +332,16 @@ def validate_global_financial_conditions_contract(
             "blocked_series": MISSING_SERIES,
         }
         and manifest_package.get("us_full_history_evidence") == US_FULL_EVIDENCE_SUMMARY
+        and manifest_package.get("us_prospective_pit_evidence") == {
+            "status": "SOL_ACCEPTED_PIT_B_PROSPECTIVE_ONLY_7_US_SNAPSHOTS",
+            "scope": "captured_snapshots_only_no_historical_promotion",
+            "pit_counts": {"PIT-A": 0, "PIT-B_PROSPECTIVE_ONLY": 7, "PIT-C": 0},
+            "history_rows_promoted": 0,
+            "gate_promotion": False,
+            "evidence_matrix_sha256": PROSPECTIVE_EVIDENCE_HASHES["evidence_matrix.json"],
+            "candidate_audit_sha256": PROSPECTIVE_EVIDENCE_HASHES["candidate_audit"],
+            "raw_manifest_sha256": PROSPECTIVE_EVIDENCE_HASHES["raw_manifest.json"],
+        }
         and manifest_package.get("series_full_gates") == SERIES_GATE_STATUS
         and manifest_package.get("full_blockers") == MANIFEST_BLOCKERS
         and all(manifest_package.get(field) is False for field in ("shadow_allowed", "full_history_allowed", "formal_execution_allowed", "formal_curated_written", "research_ready"))
@@ -332,6 +376,7 @@ def validate_global_financial_conditions_contract(
         "candidate_rules_fail_closed": no_proxy_fill,
         "fx_semantic_boundary": fx_boundary,
         "gold_evidence_frozen_7_of_9": gold_evidence_exact,
+        "prospective_pit_b_evidence_frozen": prospective_evidence_exact,
         "seven_series_full_evidence_gates": series_full_evidence_exact,
         "package_states_blocked": fail_closed_states and package.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9",
         "manifest_state_exact": manifest_exact,

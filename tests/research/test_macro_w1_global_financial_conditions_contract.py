@@ -46,6 +46,9 @@ def test_global_financial_conditions_contract_passes() -> None:
     assert package["fx_gold_blocked_evidence"]["candidate_rows"] == 0
     assert package["fx_gold_blocked_evidence"]["candidate_parquet"] is None
     assert package["us_full_history_evidence"]["as_of_complete_series"] == package["gold_coverage"]["ready_series"]
+    assert package["us_prospective_pit_evidence"]["pit_counts"] == {"PIT-A": 0, "PIT-B_PROSPECTIVE_ONLY": 7, "PIT-C": 0}
+    assert package["us_prospective_pit_evidence"]["history_rows_promoted"] == 0
+    assert package["us_prospective_pit_evidence"]["vintage_status"] == "observed_snapshot_only_initial_or_revised_status_not_proven"
     assert set(package["series_full_gates"]) == set(package["gold_coverage"]["ready_series"])
     assert all(gate["full_history_allowed"] is True for gate in package["series_full_gates"].values())
     assert all(gate["formal_execution_allowed"] is False for gate in package["series_full_gates"].values())
@@ -69,6 +72,10 @@ def test_global_financial_conditions_contract_passes() -> None:
         "drop_regime_break",
         "drop_available_at",
         "same_day_nyfed",
+        "http_date_as_available",
+        "schedule_as_release",
+        "claim_initial_vintage",
+        "weekday_only_tradable",
         "allow_proxy",
         "allow_fill",
         "allow_overwrite",
@@ -84,6 +91,8 @@ def test_global_financial_conditions_contract_passes() -> None:
         "fx_evidence_tamper",
         "manifest_fx_evidence_tamper",
         "full_evidence_tamper",
+        "prospective_evidence_tamper",
+        "manifest_prospective_evidence_tamper",
         "series_gate_tamper",
         "registry_full_state_tamper",
         "manifest_wrong_order",
@@ -125,6 +134,14 @@ def test_global_financial_conditions_contract_fails_closed(tmp_path: Path, mutat
         package["pit_asof_policy"].pop("available_at_rule")
     elif mutation == "same_day_nyfed":
         package["pit_asof_policy"]["nyfed_initial_publication"]["EFFR"] = "same reference day"
+    elif mutation == "http_date_as_available":
+        package["pit_asof_policy"]["retrieval_timestamp_rule"] = "HTTP Date is available_at"
+    elif mutation == "schedule_as_release":
+        package["pit_asof_policy"]["schedule_evidence_rule"] = "fixed schedules establish release_at"
+    elif mutation == "claim_initial_vintage":
+        package["pit_asof_policy"]["observed_vintage_rule"] = "all first captures are initial vintages"
+    elif mutation == "weekday_only_tradable":
+        package["pit_asof_policy"]["tradable_calendar_rule"] = "use next weekday"
     elif mutation == "allow_proxy":
         package["candidate_rules"]["proxy_series_allowed"] = True
     elif mutation == "allow_fill":
@@ -155,6 +172,10 @@ def test_global_financial_conditions_contract_fails_closed(tmp_path: Path, mutat
         manifest_package["fx_gold_blocked_evidence"]["candidate_rows"] = 1
     elif mutation == "full_evidence_tamper":
         package["us_full_history_evidence"]["structural_omissions"]["US.TREASURY.3M"] = []
+    elif mutation == "prospective_evidence_tamper":
+        package["us_prospective_pit_evidence"]["history_rows_promoted"] = 47276
+    elif mutation == "manifest_prospective_evidence_tamper":
+        manifest_package["us_prospective_pit_evidence"]["gate_promotion"] = True
     elif mutation == "series_gate_tamper":
         package["series_full_gates"]["US.EFFR"]["formal_execution_allowed"] = True
     elif mutation == "registry_full_state_tamper":
