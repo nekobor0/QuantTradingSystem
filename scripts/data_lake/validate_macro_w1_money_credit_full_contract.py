@@ -119,6 +119,9 @@ def validate_money_credit_full_contract(package_path: Path, manifest_path: Path)
         "methodology_versions_required": isinstance(rules, dict)
         and rules.get("methodology_version_required") is True
         and package_contract.get("required_methodology_breaks") == MONEY_PENDING_FULL_HISTORY_CONTRACT["required_methodology_breaks"],
+        "methodology_break_scopes_exact": isinstance(package_contract, dict)
+        and package_contract.get("methodology_break_series_scope")
+        == MONEY_PENDING_FULL_HISTORY_CONTRACT["methodology_break_series_scope"],
         "package_formal_not_built": package.get("formal_state_scope") == "package_level"
         and package.get("formal_execution_state") == "NOT_BUILT"
         and package.get("formal_curated_written") is False,

@@ -70,6 +70,8 @@ def test_frozen_money_credit_full_contract_passes() -> None:
         "wrong_partial_status",
         "restore_all_or_nothing_rule",
         "drop_methodology_break",
+        "wrong_methodology_scope",
+        "methodology_scope_alias",
         "package_formal_complete",
         "afre_formal_unwritten",
         "manifest_drift",
@@ -123,6 +125,14 @@ def test_frozen_money_credit_full_contract_fails_closed(tmp_path: Path, mutation
         contract["candidate_rules"]["blocked_series_emit_no_rows"] = True
     elif mutation == "drop_methodology_break":
         contract["required_methodology_breaks"].pop()
+    elif mutation == "wrong_methodology_scope":
+        contract["methodology_break_series_scope"]["M2_2001_07_SECURITIES_MARGIN_INCLUDED"] = ["CN.TSF.STOCK"]
+    elif mutation == "methodology_scope_alias":
+        contract["methodology_break_series_scope"]["TSF_2019_12_GOV_BONDS_WITH_HISTORY_BACKCAST_TO_2017_01"] = [
+            "CN.TSF.FLOW",
+            "CN.TSF.BALANCE",
+            "CN.TSF.GOV_BOND.FLOW",
+        ]
     elif mutation == "package_formal_complete":
         package["formal_execution_state"] = "COMPLETE"
     elif mutation == "afre_formal_unwritten":
