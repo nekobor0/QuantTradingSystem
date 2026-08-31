@@ -102,7 +102,7 @@ MONEY_FULL_BLOCKERS = [
     "package-level money_credit formal aggregation is not built; CN.TSF.RMB_LOANS.FLOW is complete only at series level",
 ]
 GLOBAL_FINANCIAL_CONDITIONS_BLOCKERS = [
-    "USD.CNY and USD.CNH still require official two-period Gold evidence",
+    "USD.CNY official 16:30 close product is confirmed, but the public historical field is unavailable and member-interface entitlement is not established",
     "all nine series still require complete official full-history evidence",
     "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
     "PIT-A release vintages and required regime breaks have not been captured and validated",
@@ -118,6 +118,13 @@ GLOBAL_FINANCIAL_CONDITIONS_GOLD_EVIDENCE = {
     "candidate_sha256": "7738CDF057CE7E6F7E1653CA805A0CC6EDD3B54A8EEFED9EBD4D2F3237BCBBD0",
     "candidate_audit_sha256": "E5F0CF2AB6192C4CE8330DBC28FB8D7DA6AA342864DE76CB4D7452BDFCB234C0",
     "pit_counts": {"PIT-A": 0, "PIT-C": 14},
+}
+GLOBAL_FINANCIAL_CONDITIONS_FX_BLOCKED_EVIDENCE = {
+    "status": "BLOCKED_NO_ACCEPTED_OFFICIAL_ROWS",
+    "candidate_rows": 0,
+    "candidate_audit_sha256": "CE3E0745875C1F4A2E9580D12BBE3BA7013917F9ECB0BA75CD70D507D1104BF8",
+    "raw_manifest_sha256": "9C91B6359DF2F79DDA3BBB8652FA1208EC11E14C2F993314ABD4FC6B4AB2FE1A",
+    "blocked_series": ["USD.CNY", "USD.CNH"],
 }
 MONEY_AFRE_SERIES_ID = "CN.TSF.RMB_LOANS.FLOW"
 MONEY_AFRE_START = "2002-01"
@@ -435,6 +442,8 @@ def _global_financial_conditions_blocked_gate_errors(package: dict[str, Any]) ->
         errors.append(_blocker("GLOBAL_GOLD_COVERAGE_MISMATCH", "global financial conditions Gold coverage must remain 7/9 with both FX series missing"))
     if package.get("gold_candidate_evidence") != GLOBAL_FINANCIAL_CONDITIONS_GOLD_EVIDENCE:
         errors.append(_blocker("GLOBAL_GOLD_EVIDENCE_MISMATCH", "global financial conditions must retain the frozen 14-row PIT-C candidate evidence"))
+    if package.get("fx_gold_blocked_evidence") != GLOBAL_FINANCIAL_CONDITIONS_FX_BLOCKED_EVIDENCE:
+        errors.append(_blocker("GLOBAL_FX_BLOCKED_EVIDENCE_MISMATCH", "global financial conditions must retain the frozen zero-row official FX evidence boundary"))
     if package.get("contract_id") != "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1" or package.get("series_count") != 9:
         errors.append(_blocker("GLOBAL_CONTRACT_IDENTITY_MISMATCH", "global financial conditions must retain the frozen nine-series V1 identity"))
     if package.get("independent_from") != ["rates_liquidity"]:

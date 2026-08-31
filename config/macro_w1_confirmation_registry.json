@@ -90,7 +90,7 @@
     {"id":"us_treasury_10y","canonical_id":"US.TREASURY.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
     {"id":"us_tips_real_10y","canonical_id":"US.TIPS.REAL.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum_real","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
     {"id":"us_broad_dollar","canonical_id":"US.BROAD_DOLLAR","package":"global_financial_conditions","source":"FEDERAL_RESERVE_H10","frequency":"business_daily","unit":"index_2006_100","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"id":"usd_cny","canonical_id":"USD.CNY","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cny_per_usd","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"usd_cny","canonical_id":"USD.CNY","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cny_per_usd","existing":null,"state":"OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"},
     {"id":"usd_cnh","canonical_id":"USD.CNH","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cnh_per_usd","existing":null,"state":"SOURCE_AND_ENTITLEMENT_BLOCKED"}
   ],
   "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10", "W1_D11", "GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4"],

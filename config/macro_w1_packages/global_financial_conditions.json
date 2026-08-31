@@ -38,6 +38,25 @@
       "old_goods_only_broad_index_forbidden": true
     }
   },
+  "fx_gold_blocked_evidence": {
+    "status": "BLOCKED_NO_ACCEPTED_OFFICIAL_ROWS",
+    "requested_window": ["2026-08-20", "2026-08-21"],
+    "candidate_rows": 0,
+    "candidate_parquet": null,
+    "passed_series": [],
+    "blocked_series": ["USD.CNY", "USD.CNH"],
+    "pit_counts": {"PIT-A": 0, "PIT-C": 0},
+    "frozen_sha256": {
+      "candidate_audit": "CE3E0745875C1F4A2E9580D12BBE3BA7013917F9ECB0BA75CD70D507D1104BF8",
+      "source_map.json": "FE394C1B8A999DABAF54C5A16783DA2AEFF7BCB98E3B305627A8A33518A1C08C",
+      "manual_audit.json": "AF6266A823AA22E8A8318E7A995627BDEF40D090CB768D3E60A9F79F5F7E7099",
+      "request_evidence_log.json": "DED720E9313D2D0AF5A6EC283D15EEEE054F422BB137715C9AA76CC3D275B3F9",
+      "raw_manifest.json": "9C91B6359DF2F79DDA3BBB8652FA1208EC11E14C2F993314ABD4FC6B4AB2FE1A"
+    },
+    "usd_cny_resolution": "official_1630_close_product_confirmed_but_public_historical_field_unavailable_and_member_interface_entitlement_not_established",
+    "usd_cnh_resolution": "official_historical_source_matched_observation_time_and_entitlement_unresolved",
+    "diagnostic_values_are_not_candidate_evidence": true
+  },
   "shadow_allowed": false,
   "full_history_allowed": false,
   "formal_execution_allowed": false,
@@ -106,7 +125,7 @@
     {"series_id":"US.TREASURY.10Y","source":"US_TREASURY","official_field":"BC_10YEAR","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_par_yield_curve","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
     {"series_id":"US.TIPS.REAL.10Y","source":"US_TREASURY","official_field":"TC_10YEAR","frequency":"business_daily","unit":"percent_per_annum_real","measure_basis":"daily_par_real_yield_curve","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
     {"series_id":"US.BROAD_DOLLAR","source":"FEDERAL_RESERVE_H10","official_field":"H10/H10/JRXWTFB_N.B","frequency":"business_daily","unit":"index_2006_100","measure_basis":"nominal_trade_weighted_broad_dollar_index","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"series_id":"USD.CNY","source":"CFETS_CHINAMONEY","official_field":"USD_CNY_1630_SPOT_CLOSE","frequency":"business_daily","unit":"cny_per_usd","measure_basis":"official_interbank_spot_closing_price_1630","pit_grade":"A_C_MIXED_PENDING_EVIDENCE","license_scope":"internal_research","implementation":"CONTRACT_ONLY"},
+    {"series_id":"USD.CNY","source":"CFETS_CHINAMONEY","official_field":"USD_CNY_1630_SPOT_CLOSE","frequency":"business_daily","unit":"cny_per_usd","measure_basis":"official_interbank_spot_closing_price_1630","pit_grade":"C_ACCESS_BLOCKED_NO_ACCEPTED_ROWS","license_scope":"member_interface_entitlement_not_established","implementation":"OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"},
     {"series_id":"USD.CNH","source":"CFETS_CHINAMONEY","official_field":"UNRESOLVED_OFFICIAL_USD_CNH_SPOT_CLOSE","frequency":"business_daily","unit":"cnh_per_usd","measure_basis":"offshore_spot_close_target_matched_timestamp","pit_grade":"C_SOURCE_BLOCKED","license_scope":"entitlement_unresolved","implementation":"SOURCE_AND_ENTITLEMENT_BLOCKED"}
   ],
   "readiness_rule": "all nine series require official Gold, exact calendars, raw closure, PIT/as-of evidence and regime-version validation before any full-history or research gate"

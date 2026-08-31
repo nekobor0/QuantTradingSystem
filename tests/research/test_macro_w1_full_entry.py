@@ -27,6 +27,8 @@ def test_w1_full_entry_has_three_ready_and_three_blocked_packages():
     }
     assert package["full_history_allowed"] is False
     assert package["formal_curated_written"] is False
+    assert package["fx_gold_blocked_evidence"]["candidate_rows"] == 0
+    assert package["fx_gold_blocked_evidence"]["blocked_series"] == ["USD.CNY", "USD.CNH"]
     assert package["research_ready"] is False
 
 
@@ -355,6 +357,17 @@ def test_global_financial_conditions_rejects_gold_coverage_tamper(tmp_path: Path
     manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
     package = next(item for item in manifest["packages"] if item["package_id"] == "global_financial_conditions")
     package["gold_coverage"]["ready_count"] = 9
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "global_financial_conditions" in result["invalid_packages"]
+
+
+def test_global_financial_conditions_rejects_fx_blocked_evidence_tamper(tmp_path: Path) -> None:
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    package = next(item for item in manifest["packages"] if item["package_id"] == "global_financial_conditions")
+    package["fx_gold_blocked_evidence"]["candidate_rows"] = 1
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(manifest), encoding="utf-8")
     result = validate_full_entry(path)

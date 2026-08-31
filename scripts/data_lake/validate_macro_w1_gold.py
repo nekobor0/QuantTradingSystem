@@ -28,6 +28,10 @@ from validate_macro_w1_global_financial_conditions_us_candidate import (  # noqa
     READY_SERIES as GLOBAL_READY_SERIES,
     validate_global_financial_conditions_us_candidate,
 )
+from validate_macro_w1_global_financial_conditions_fx_candidate import (  # noqa: E402
+    FROZEN_HASHES as GLOBAL_FX_FROZEN_HASHES,
+    validate_global_financial_conditions_fx_candidate,
+)
 from validate_macro_w1_money_credit_afre_candidate import (  # noqa: E402
     FROZEN_HASHES as MONEY_AFRE_FROZEN_HASHES,
     SERIES_ID as MONEY_AFRE_SERIES_ID,
@@ -196,11 +200,13 @@ def validate_registry(registry_path: Path) -> dict[str, Any]:
         contract = _load(ROOT / "config" / "macro_w1_packages" / f"{package_id}.json")
         if package_id == "global_financial_conditions":
             candidate = validate_global_financial_conditions_us_candidate()
+            fx_evidence = validate_global_financial_conditions_fx_candidate()
             coverage = contract.get("gold_coverage", {})
             effective = spec.get("effective_gold_coverage", {})
             evidence = contract.get("gold_candidate_evidence", {})
             checks = {
                 "candidate_evidence_valid": candidate["passed"],
+                "fx_blocked_evidence_valid": fx_evidence["passed"],
                 "partial_seven_of_nine_exact": contract.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
                 and spec.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
                 and coverage.get("ready_count") == 7
@@ -210,6 +216,13 @@ def validate_registry(registry_path: Path) -> dict[str, Any]:
                 and effective == coverage,
                 "frozen_evidence_exact": spec.get("frozen_sha256") == GLOBAL_FROZEN_HASHES
                 and evidence.get("frozen_sha256") == GLOBAL_FROZEN_HASHES,
+                "fx_frozen_evidence_exact": spec.get("fx_blocked_evidence") == {
+                    "status": "BLOCKED_NO_ACCEPTED_OFFICIAL_ROWS",
+                    "candidate_rows": 0,
+                    "blocked_series": GLOBAL_MISSING_SERIES,
+                    "frozen_sha256": GLOBAL_FX_FROZEN_HASHES,
+                }
+                and contract.get("fx_gold_blocked_evidence", {}).get("frozen_sha256") == GLOBAL_FX_FROZEN_HASHES,
                 "pit_c_not_full_history": evidence.get("pit_counts") == {"PIT-A": 0, "PIT-C": 14}
                 and contract.get("gold_ready") is False
                 and contract.get("full_history_allowed") is False

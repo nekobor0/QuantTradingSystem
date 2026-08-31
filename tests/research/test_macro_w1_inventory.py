@@ -20,6 +20,7 @@ def test_w1_inventory_matches_actual_44_series_state() -> None:
         "global_financial_conditions": 9,
     }
     assert result["state_counts"]["GOLD_READY_FROZEN_CANDIDATE_PIT_C"] == 7
+    assert result["state_counts"]["OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"] == 1
 
 
 def test_w1_inventory_rejects_global_gold_state_tamper(tmp_path: Path) -> None:

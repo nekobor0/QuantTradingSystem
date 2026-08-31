@@ -50,7 +50,7 @@ def validate_inventory(path: Path) -> dict[str, object]:
                 "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR",
             )
         )
-        and global_by_id["USD.CNY"]["state"] == "CONTRACT_ONLY"
+        and global_by_id["USD.CNY"]["state"] == "OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"
         and global_by_id["USD.CNH"]["state"] == "SOURCE_AND_ENTITLEMENT_BLOCKED",
     }
     failures = sorted(name for name, passed in checks.items() if not passed)

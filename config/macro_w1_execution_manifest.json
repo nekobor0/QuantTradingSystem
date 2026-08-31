@@ -318,8 +318,15 @@
         "candidate_audit_sha256": "E5F0CF2AB6192C4CE8330DBC28FB8D7DA6AA342864DE76CB4D7452BDFCB234C0",
         "pit_counts": {"PIT-A": 0, "PIT-C": 14}
       },
+      "fx_gold_blocked_evidence": {
+        "status": "BLOCKED_NO_ACCEPTED_OFFICIAL_ROWS",
+        "candidate_rows": 0,
+        "candidate_audit_sha256": "CE3E0745875C1F4A2E9580D12BBE3BA7013917F9ECB0BA75CD70D507D1104BF8",
+        "raw_manifest_sha256": "9C91B6359DF2F79DDA3BBB8652FA1208EC11E14C2F993314ABD4FC6B4AB2FE1A",
+        "blocked_series": ["USD.CNY", "USD.CNH"]
+      },
       "full_blockers": [
-        "USD.CNY and USD.CNH still require official two-period Gold evidence",
+        "USD.CNY official 16:30 close product is confirmed, but the public historical field is unavailable and member-interface entitlement is not established",
         "all nine series still require complete official full-history evidence",
         "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
         "PIT-A release vintages and required regime breaks have not been captured and validated"

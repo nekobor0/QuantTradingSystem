@@ -43,6 +43,8 @@ def test_global_financial_conditions_contract_passes() -> None:
     assert package["status"] == "GOLD_BLOCKED_PARTIAL_7_OF_9"
     assert package["gold_coverage"]["ready_count"] == 7
     assert package["gold_coverage"]["missing_series"] == ["USD.CNY", "USD.CNH"]
+    assert package["fx_gold_blocked_evidence"]["candidate_rows"] == 0
+    assert package["fx_gold_blocked_evidence"]["candidate_parquet"] is None
 
 
 @pytest.mark.parametrize(
@@ -57,6 +59,7 @@ def test_global_financial_conditions_contract_passes() -> None:
         "wrong_tips_basis",
         "wrong_broad_dollar_unit",
         "cny_midpoint_instead_of_close",
+        "cny_entitlement_claim",
         "cnh_proxy",
         "cnh_entitlement_claim",
         "drop_regime_break",
@@ -74,6 +77,8 @@ def test_global_financial_conditions_contract_passes() -> None:
         "manifest_remove_blocker",
         "gold_coverage_tamper",
         "broad_dollar_resolution_tamper",
+        "fx_evidence_tamper",
+        "manifest_fx_evidence_tamper",
         "manifest_wrong_order",
         "registry_wrong_source",
     ],
@@ -101,6 +106,8 @@ def test_global_financial_conditions_contract_fails_closed(tmp_path: Path, mutat
         series["US.BROAD_DOLLAR"]["unit"] = "percent"
     elif mutation == "cny_midpoint_instead_of_close":
         series["USD.CNY"]["official_field"] = "USD_CNY_CENTRAL_PARITY"
+    elif mutation == "cny_entitlement_claim":
+        series["USD.CNY"]["license_scope"] = "internal_research"
     elif mutation == "cnh_proxy":
         series["USD.CNH"]["official_field"] = "USD_CNY_1630_SPOT_CLOSE"
     elif mutation == "cnh_entitlement_claim":
@@ -135,6 +142,10 @@ def test_global_financial_conditions_contract_fails_closed(tmp_path: Path, mutat
         package["gold_coverage"]["ready_count"] = 9
     elif mutation == "broad_dollar_resolution_tamper":
         package["gold_candidate_evidence"]["broad_dollar_metadata_resolution"]["old_goods_only_broad_index_forbidden"] = False
+    elif mutation == "fx_evidence_tamper":
+        package["fx_gold_blocked_evidence"]["candidate_rows"] = 1
+    elif mutation == "manifest_fx_evidence_tamper":
+        manifest_package["fx_gold_blocked_evidence"]["candidate_rows"] = 1
     elif mutation == "manifest_wrong_order":
         manifest_package["order"] = 5
     elif mutation == "registry_wrong_source":

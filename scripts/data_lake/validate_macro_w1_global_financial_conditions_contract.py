@@ -71,11 +71,31 @@ SERIES_FIELDS = {
     "USD.CNH": ("CFETS_CHINAMONEY", "UNRESOLVED_OFFICIAL_USD_CNH_SPOT_CLOSE", "cnh_per_usd", "offshore_spot_close_target_matched_timestamp"),
 }
 MANIFEST_BLOCKERS = [
-    "USD.CNY and USD.CNH still require official two-period Gold evidence",
+    "USD.CNY official 16:30 close product is confirmed, but the public historical field is unavailable and member-interface entitlement is not established",
     "all nine series still require complete official full-history evidence",
     "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
     "PIT-A release vintages and required regime breaks have not been captured and validated",
 ]
+FX_EVIDENCE_HASHES = {
+    "candidate_audit": "CE3E0745875C1F4A2E9580D12BBE3BA7013917F9ECB0BA75CD70D507D1104BF8",
+    "source_map.json": "FE394C1B8A999DABAF54C5A16783DA2AEFF7BCB98E3B305627A8A33518A1C08C",
+    "manual_audit.json": "AF6266A823AA22E8A8318E7A995627BDEF40D090CB768D3E60A9F79F5F7E7099",
+    "request_evidence_log.json": "DED720E9313D2D0AF5A6EC283D15EEEE054F422BB137715C9AA76CC3D275B3F9",
+    "raw_manifest.json": "9C91B6359DF2F79DDA3BBB8652FA1208EC11E14C2F993314ABD4FC6B4AB2FE1A",
+}
+FX_BLOCKED_EVIDENCE = {
+    "status": "BLOCKED_NO_ACCEPTED_OFFICIAL_ROWS",
+    "requested_window": ["2026-08-20", "2026-08-21"],
+    "candidate_rows": 0,
+    "candidate_parquet": None,
+    "passed_series": [],
+    "blocked_series": ["USD.CNY", "USD.CNH"],
+    "pit_counts": {"PIT-A": 0, "PIT-C": 0},
+    "frozen_sha256": FX_EVIDENCE_HASHES,
+    "usd_cny_resolution": "official_1630_close_product_confirmed_but_public_historical_field_unavailable_and_member_interface_entitlement_not_established",
+    "usd_cnh_resolution": "official_historical_source_matched_observation_time_and_entitlement_unresolved",
+    "diagnostic_values_are_not_candidate_evidence": True,
+}
 READY_SERIES = SERIES_ORDER[:7]
 MISSING_SERIES = SERIES_ORDER[7:]
 GOLD_COVERAGE = {
@@ -193,10 +213,14 @@ def validate_global_financial_conditions_contract(
     fx_boundary = (
         series_by_id.get("USD.CNY", {}).get("official_field") == "USD_CNY_1630_SPOT_CLOSE"
         and series_by_id.get("USD.CNY", {}).get("measure_basis") == "official_interbank_spot_closing_price_1630"
+        and series_by_id.get("USD.CNY", {}).get("pit_grade") == "C_ACCESS_BLOCKED_NO_ACCEPTED_ROWS"
+        and series_by_id.get("USD.CNY", {}).get("license_scope") == "member_interface_entitlement_not_established"
+        and series_by_id.get("USD.CNY", {}).get("implementation") == "OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"
         and series_by_id.get("USD.CNH", {}).get("implementation") == "SOURCE_AND_ENTITLEMENT_BLOCKED"
         and series_by_id.get("USD.CNH", {}).get("license_scope") == "entitlement_unresolved"
     )
     evidence = package.get("gold_candidate_evidence")
+    fx_evidence = package.get("fx_gold_blocked_evidence")
     gold_evidence_exact = (
         package.get("gold_coverage") == GOLD_COVERAGE
         and isinstance(evidence, dict)
@@ -217,6 +241,7 @@ def validate_global_financial_conditions_contract(
             and series_by_id[series_id].get("implementation") == "GOLD_READY_FROZEN_CANDIDATE_PIT_C"
             for series_id in READY_SERIES
         )
+        and fx_evidence == FX_BLOCKED_EVIDENCE
     )
     manifest_exact = (
         len(manifest_matches) == 1
@@ -228,6 +253,13 @@ def validate_global_financial_conditions_contract(
         and manifest_package.get("series_count") == 9
         and manifest_package.get("independent_from") == ["rates_liquidity"]
         and manifest_package.get("layers") == list(LAYERS)
+        and manifest_package.get("fx_gold_blocked_evidence") == {
+            "status": "BLOCKED_NO_ACCEPTED_OFFICIAL_ROWS",
+            "candidate_rows": 0,
+            "candidate_audit_sha256": FX_EVIDENCE_HASHES["candidate_audit"],
+            "raw_manifest_sha256": FX_EVIDENCE_HASHES["raw_manifest.json"],
+            "blocked_series": MISSING_SERIES,
+        }
         and manifest_package.get("full_blockers") == MANIFEST_BLOCKERS
         and all(manifest_package.get(field) is False for field in ("shadow_allowed", "full_history_allowed", "formal_execution_allowed", "formal_curated_written", "research_ready"))
     )
@@ -240,7 +272,7 @@ def validate_global_financial_conditions_contract(
             and registered.get(series_id, {}).get("source") == series_by_id.get(series_id, {}).get("source")
             and registered.get(series_id, {}).get("state") == (
                 "GOLD_READY_FROZEN_CANDIDATE_PIT_C" if series_id in READY_SERIES
-                else "CONTRACT_ONLY" if series_id == "USD.CNY"
+                else "OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED" if series_id == "USD.CNY"
                 else "SOURCE_AND_ENTITLEMENT_BLOCKED"
             )
             for series_id in SERIES_ORDER

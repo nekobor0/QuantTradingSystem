@@ -37,6 +37,18 @@ def test_w1_gold_registry_has_evidence_backed_ready_and_blocked_packages():
     assert global_package["gold_required_count"] == 9
     assert global_package["gold_missing"] == ["USD.CNY", "USD.CNH"]
     assert global_package["package_ready"] is False
+    assert global_package["checks"]["fx_blocked_evidence_valid"] is True
+    assert global_package["checks"]["fx_frozen_evidence_exact"] is True
+
+
+def test_w1_gold_rejects_global_fx_blocked_evidence_sha_tamper(tmp_path: Path):
+    registry = json.loads((ROOT / "config" / "macro_w1_gold_registry.json").read_text(encoding="utf-8"))
+    registry["packages"]["global_financial_conditions"]["fx_blocked_evidence"]["frozen_sha256"]["candidate_audit"] = "0" * 64
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+    result = validate_registry(path)
+    assert not result["passed"]
+    assert "global_financial_conditions" in result["invalid_packages"]
 
 
 def test_w1_gold_rejects_global_candidate_frozen_sha_tamper(tmp_path: Path):
