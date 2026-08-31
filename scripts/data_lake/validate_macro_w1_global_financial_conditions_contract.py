@@ -71,10 +71,27 @@ SERIES_FIELDS = {
     "USD.CNH": ("CFETS_CHINAMONEY", "UNRESOLVED_OFFICIAL_USD_CNH_SPOT_CLOSE", "cnh_per_usd", "offshore_spot_close_target_matched_timestamp"),
 }
 MANIFEST_BLOCKERS = [
-    "all nine series require official two-period Gold and full-history evidence",
+    "USD.CNY and USD.CNH still require official two-period Gold evidence",
+    "all nine series still require complete official full-history evidence",
     "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
     "PIT-A release vintages and required regime breaks have not been captured and validated",
 ]
+READY_SERIES = SERIES_ORDER[:7]
+MISSING_SERIES = SERIES_ORDER[7:]
+GOLD_COVERAGE = {
+    "ready_count": 7,
+    "required_count": 9,
+    "ready_series": READY_SERIES,
+    "missing_series": MISSING_SERIES,
+}
+GOLD_EVIDENCE_HASHES = {
+    "candidate_canonical_v2.parquet": "7738CDF057CE7E6F7E1653CA805A0CC6EDD3B54A8EEFED9EBD4D2F3237BCBBD0",
+    "expected.json": "1458D90A0CBA56C773C057991F903C34432AFEFC94D0444B5254EA3644109351",
+    "source_map.json": "A5BA0561322E21A603322343E1C449AE664E4F2A229C62DF27A65D5D9634E0FC",
+    "manual_audit.json": "32A9AE58857AC1FBDE471D05948E48860CB6F41D3CF2BCD7A37AA9572238B61F",
+    "raw_manifest.json": "293A68F380CD036F2A7CAF6B76C702C80A9C107FD4651AADCE9F6C7F29407231",
+    "candidate_audit": "E5F0CF2AB6192C4CE8330DBC28FB8D7DA6AA342864DE76CB4D7452BDFCB234C0",
+}
 
 
 def _load(path: Path) -> dict[str, Any] | None:
@@ -179,11 +196,34 @@ def validate_global_financial_conditions_contract(
         and series_by_id.get("USD.CNH", {}).get("implementation") == "SOURCE_AND_ENTITLEMENT_BLOCKED"
         and series_by_id.get("USD.CNH", {}).get("license_scope") == "entitlement_unresolved"
     )
+    evidence = package.get("gold_candidate_evidence")
+    gold_evidence_exact = (
+        package.get("gold_coverage") == GOLD_COVERAGE
+        and isinstance(evidence, dict)
+        and evidence.get("status") == "SOL_ACCEPTED_PIT_C_GOLD_7_OF_9"
+        and evidence.get("candidate_rows") == 14
+        and evidence.get("reference_dates") == ["2026-08-20", "2026-08-21"]
+        and evidence.get("pit_counts") == {"PIT-A": 0, "PIT-C": 14}
+        and evidence.get("frozen_sha256") == GOLD_EVIDENCE_HASHES
+        and evidence.get("broad_dollar_metadata_resolution") == {
+            "canonical_unit": "index_2006_100",
+            "official_series": "H10/H10/JRXWTFB_N.B",
+            "preview_label": "Index:_1997_Jan_100",
+            "resolution": "official_preview_label_conflicts_with_post_2019_H10_methodology; values accepted without rescaling as the post-2019 nominal broad dollar index indexed to January 2006",
+            "old_goods_only_broad_index_forbidden": True,
+        }
+        and all(
+            series_by_id[series_id].get("pit_grade") == "C_GOLD_FROZEN_PENDING_FULL_HISTORY"
+            and series_by_id[series_id].get("implementation") == "GOLD_READY_FROZEN_CANDIDATE_PIT_C"
+            for series_id in READY_SERIES
+        )
+    )
     manifest_exact = (
         len(manifest_matches) == 1
         and manifest_package.get("order") == 6
-        and manifest_package.get("gold_state") == "CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED"
-        and manifest_package.get("shadow_state") == "CONTRACT_FROZEN_NO_CANDIDATE"
+        and manifest_package.get("gold_state") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
+        and manifest_package.get("gold_coverage") == {"ready_count": 7, "required_count": 9, "missing_series": MISSING_SERIES}
+        and manifest_package.get("shadow_state") == "GOLD_PARTIAL_7_OF_9_NO_PACKAGE_SHADOW"
         and manifest_package.get("contract_id") == "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1"
         and manifest_package.get("series_count") == 9
         and manifest_package.get("independent_from") == ["rates_liquidity"]
@@ -198,6 +238,11 @@ def validate_global_financial_conditions_contract(
         and all(
             registered.get(series_id, {}).get("package") == "global_financial_conditions"
             and registered.get(series_id, {}).get("source") == series_by_id.get(series_id, {}).get("source")
+            and registered.get(series_id, {}).get("state") == (
+                "GOLD_READY_FROZEN_CANDIDATE_PIT_C" if series_id in READY_SERIES
+                else "CONTRACT_ONLY" if series_id == "USD.CNY"
+                else "SOURCE_AND_ENTITLEMENT_BLOCKED"
+            )
             for series_id in SERIES_ORDER
         )
     )
@@ -215,7 +260,8 @@ def validate_global_financial_conditions_contract(
         "regime_breaks_exact": package.get("required_regime_breaks") == REGIME_BREAKS,
         "candidate_rules_fail_closed": no_proxy_fill,
         "fx_semantic_boundary": fx_boundary,
-        "package_states_blocked": fail_closed_states and package.get("status") == "CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED",
+        "gold_evidence_frozen_7_of_9": gold_evidence_exact,
+        "package_states_blocked": fail_closed_states and package.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9",
         "manifest_state_exact": manifest_exact,
         "registry_union_exact": registry_exact,
     }

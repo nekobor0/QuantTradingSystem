@@ -34,7 +34,7 @@
     {"package_id":"prices","order":3,"series_count":5,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_CROSSCHECK_MAPPED"},
     {"package_id":"money_credit","order":4,"series_count":8,"active_required_series_count":6,"retired_series_count":2,"primary_sources":["PBOC_STATS"],"sample_state":"ACTIVE_GOLD_6_OF_6_TWO_UNOBSERVABLE_LEGACY_DEFINITIONS_RETIRED"},
     {"package_id":"growth_output","order":5,"series_count":3,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_GDP_CROSSCHECK_MAPPED"},
-    {"package_id":"global_financial_conditions","order":6,"series_count":9,"primary_sources":["NYFED_MARKETS","US_TREASURY","FEDERAL_RESERVE_H10","CFETS_CHINAMONEY"],"sample_state":"CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED"}
+    {"package_id":"global_financial_conditions","order":6,"series_count":9,"primary_sources":["NYFED_MARKETS","US_TREASURY","FEDERAL_RESERVE_H10","CFETS_CHINAMONEY"],"sample_state":"GOLD_BLOCKED_PARTIAL_7_OF_9"}
   ],
   "sources": {
     "NBS_RELEASE":{"url":"https://www.stats.gov.cn/sj/zxfb/","authority":"official","acquisition":"html_release_and_attachment","release_evidence":"printed_page_timestamp","probe":"reachable","pit_grade":"A"},
@@ -83,13 +83,13 @@
     {"id":"gdp_nominal","canonical_id":"CN.GDP.NOMINAL.YTD","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"100m_cny","existing":"cn_gdp.parquet:gdp","state":"FIELD_MAPPED_DEFINITION_GATE"},
     {"id":"gdp_real_yoy","canonical_id":"CN.GDP.REAL.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"percent_yoy","existing":"cn_gdp.parquet:gdp_yoy","state":"FIELD_MAPPED"},
     {"id":"industrial_va_yoy","canonical_id":"CN.INDUSTRIAL.VA.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"monthly_with_jan_feb_joint","unit":"percent_yoy","existing":null,"state":"NEEDS_ADAPTER_PERIOD_SPAN_GATE"},
-    {"id":"us_effr","canonical_id":"US.EFFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
-    {"id":"us_sofr","canonical_id":"US.SOFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
-    {"id":"us_treasury_3m","canonical_id":"US.TREASURY.3M","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
-    {"id":"us_treasury_2y","canonical_id":"US.TREASURY.2Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
-    {"id":"us_treasury_10y","canonical_id":"US.TREASURY.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
-    {"id":"us_tips_real_10y","canonical_id":"US.TIPS.REAL.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum_real","existing":null,"state":"CONTRACT_ONLY"},
-    {"id":"us_broad_dollar","canonical_id":"US.BROAD_DOLLAR","package":"global_financial_conditions","source":"FEDERAL_RESERVE_H10","frequency":"business_daily","unit":"index_2006_100","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"us_effr","canonical_id":"US.EFFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"id":"us_sofr","canonical_id":"US.SOFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"id":"us_treasury_3m","canonical_id":"US.TREASURY.3M","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"id":"us_treasury_2y","canonical_id":"US.TREASURY.2Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"id":"us_treasury_10y","canonical_id":"US.TREASURY.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"id":"us_tips_real_10y","canonical_id":"US.TIPS.REAL.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum_real","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"id":"us_broad_dollar","canonical_id":"US.BROAD_DOLLAR","package":"global_financial_conditions","source":"FEDERAL_RESERVE_H10","frequency":"business_daily","unit":"index_2006_100","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
     {"id":"usd_cny","canonical_id":"USD.CNY","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cny_per_usd","existing":null,"state":"CONTRACT_ONLY"},
     {"id":"usd_cnh","canonical_id":"USD.CNH","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cnh_per_usd","existing":null,"state":"SOURCE_AND_ENTITLEMENT_BLOCKED"}
   ],

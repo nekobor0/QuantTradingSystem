@@ -22,6 +22,12 @@ from validate_macro_w1_rates_gold_candidate import (  # noqa: E402
     validate_rates_gold_candidate,
 )
 from validate_macro_w1_full_entry import RATES_CHINABOND_HISTORY_EVIDENCE  # noqa: E402
+from validate_macro_w1_global_financial_conditions_us_candidate import (  # noqa: E402
+    FROZEN_HASHES as GLOBAL_FROZEN_HASHES,
+    MISSING_SERIES as GLOBAL_MISSING_SERIES,
+    READY_SERIES as GLOBAL_READY_SERIES,
+    validate_global_financial_conditions_us_candidate,
+)
 from validate_macro_w1_money_credit_afre_candidate import (  # noqa: E402
     FROZEN_HASHES as MONEY_AFRE_FROZEN_HASHES,
     SERIES_ID as MONEY_AFRE_SERIES_ID,
@@ -188,7 +194,44 @@ def validate_registry(registry_path: Path) -> dict[str, Any]:
     results: dict[str, Any] = {}
     for package_id, spec in registry["packages"].items():
         contract = _load(ROOT / "config" / "macro_w1_packages" / f"{package_id}.json")
-        if package_id == "rates_liquidity":
+        if package_id == "global_financial_conditions":
+            candidate = validate_global_financial_conditions_us_candidate()
+            coverage = contract.get("gold_coverage", {})
+            effective = spec.get("effective_gold_coverage", {})
+            evidence = contract.get("gold_candidate_evidence", {})
+            checks = {
+                "candidate_evidence_valid": candidate["passed"],
+                "partial_seven_of_nine_exact": contract.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
+                and spec.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
+                and coverage.get("ready_count") == 7
+                and coverage.get("required_count") == 9
+                and coverage.get("ready_series") == GLOBAL_READY_SERIES
+                and coverage.get("missing_series") == GLOBAL_MISSING_SERIES
+                and effective == coverage,
+                "frozen_evidence_exact": spec.get("frozen_sha256") == GLOBAL_FROZEN_HASHES
+                and evidence.get("frozen_sha256") == GLOBAL_FROZEN_HASHES,
+                "pit_c_not_full_history": evidence.get("pit_counts") == {"PIT-A": 0, "PIT-C": 14}
+                and contract.get("gold_ready") is False
+                and contract.get("full_history_allowed") is False
+                and contract.get("formal_execution_allowed") is False
+                and contract.get("formal_curated_written") is False
+                and contract.get("research_ready") is False,
+            }
+            failures = sorted(name for name, passed in checks.items() if not passed)
+            results[package_id] = {
+                "package_id": package_id,
+                "evidence_valid": not failures,
+                "package_ready": False,
+                "status": contract.get("status"),
+                "gold_ready_count": candidate["gold_ready_count"],
+                "gold_required_count": candidate["gold_required_count"],
+                "gold_missing": candidate["gold_missing"],
+                "checks": checks,
+                "periods": {},
+                "candidate": candidate,
+                "failures": failures,
+            }
+        elif package_id == "rates_liquidity":
             expected_series = {item["series_id"] for item in contract["series"]}
             series_by_id = {item["series_id"]: item for item in contract["series"]}
             covered = set(spec["covered_series"])

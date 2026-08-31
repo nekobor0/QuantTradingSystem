@@ -102,10 +102,23 @@ MONEY_FULL_BLOCKERS = [
     "package-level money_credit formal aggregation is not built; CN.TSF.RMB_LOANS.FLOW is complete only at series level",
 ]
 GLOBAL_FINANCIAL_CONDITIONS_BLOCKERS = [
-    "all nine series require official two-period Gold and full-history evidence",
+    "USD.CNY and USD.CNH still require official two-period Gold evidence",
+    "all nine series still require complete official full-history evidence",
     "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
     "PIT-A release vintages and required regime breaks have not been captured and validated",
 ]
+GLOBAL_FINANCIAL_CONDITIONS_GOLD_COVERAGE = {
+    "ready_count": 7,
+    "required_count": 9,
+    "missing_series": ["USD.CNY", "USD.CNH"],
+}
+GLOBAL_FINANCIAL_CONDITIONS_GOLD_EVIDENCE = {
+    "status": "SOL_ACCEPTED_PIT_C_GOLD_7_OF_9",
+    "candidate_rows": 14,
+    "candidate_sha256": "7738CDF057CE7E6F7E1653CA805A0CC6EDD3B54A8EEFED9EBD4D2F3237BCBBD0",
+    "candidate_audit_sha256": "E5F0CF2AB6192C4CE8330DBC28FB8D7DA6AA342864DE76CB4D7452BDFCB234C0",
+    "pit_counts": {"PIT-A": 0, "PIT-C": 14},
+}
 MONEY_AFRE_SERIES_ID = "CN.TSF.RMB_LOANS.FLOW"
 MONEY_AFRE_START = "2002-01"
 MONEY_AFRE_END = "2026-07"
@@ -416,8 +429,12 @@ def _money_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
 
 def _global_financial_conditions_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
-    if package.get("gold_state") != "CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED":
-        errors.append(_blocker("GLOBAL_GOLD_STATE_MISMATCH", "global financial conditions must remain contract-only before official Gold"))
+    if package.get("gold_state") != "GOLD_BLOCKED_PARTIAL_7_OF_9":
+        errors.append(_blocker("GLOBAL_GOLD_STATE_MISMATCH", "global financial conditions must retain the frozen partial 7/9 Gold state"))
+    if package.get("gold_coverage") != GLOBAL_FINANCIAL_CONDITIONS_GOLD_COVERAGE:
+        errors.append(_blocker("GLOBAL_GOLD_COVERAGE_MISMATCH", "global financial conditions Gold coverage must remain 7/9 with both FX series missing"))
+    if package.get("gold_candidate_evidence") != GLOBAL_FINANCIAL_CONDITIONS_GOLD_EVIDENCE:
+        errors.append(_blocker("GLOBAL_GOLD_EVIDENCE_MISMATCH", "global financial conditions must retain the frozen 14-row PIT-C candidate evidence"))
     if package.get("contract_id") != "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1" or package.get("series_count") != 9:
         errors.append(_blocker("GLOBAL_CONTRACT_IDENTITY_MISMATCH", "global financial conditions must retain the frozen nine-series V1 identity"))
     if package.get("independent_from") != ["rates_liquidity"]:
@@ -430,8 +447,8 @@ def _global_financial_conditions_blocked_gate_errors(package: dict[str, Any]) ->
         errors.append(_blocker("GLOBAL_FORMAL_WRITE_FORBIDDEN", "global financial conditions formal execution must remain disabled"))
     if package.get("research_ready") is not False:
         errors.append(_blocker("GLOBAL_RESEARCH_READY_FORBIDDEN", "global financial conditions cannot be research ready"))
-    if package.get("shadow_state") != "CONTRACT_FROZEN_NO_CANDIDATE":
-        errors.append(_blocker("GLOBAL_SHADOW_STATE_MISMATCH", "global financial conditions must remain contract-only without a candidate"))
+    if package.get("shadow_state") != "GOLD_PARTIAL_7_OF_9_NO_PACKAGE_SHADOW":
+        errors.append(_blocker("GLOBAL_SHADOW_STATE_MISMATCH", "global financial conditions must remain partial Gold without a package shadow"))
     if package.get("full_blockers") != GLOBAL_FINANCIAL_CONDITIONS_BLOCKERS:
         errors.append(_blocker("GLOBAL_FULL_BLOCKERS_MISMATCH", "global financial conditions blockers must match the frozen evidence boundary"))
     return errors

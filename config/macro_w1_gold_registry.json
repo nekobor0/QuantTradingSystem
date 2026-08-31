@@ -85,6 +85,25 @@
         "2026-Q1": ["https://www.stats.gov.cn/sj/zxfbhjd/202604/t20260417_1963336.html", "https://www.stats.gov.cn/sj/zxfb/202604/t20260416_1963329.html"],
         "2026-Q2": ["https://www.stats.gov.cn/sj/zxfb/202607/t20260716_1964142.html", "https://www.stats.gov.cn/sj/zxfb/202607/t20260715_1964123.html"]
       }
+    },
+    "global_financial_conditions": {
+      "status": "GOLD_BLOCKED_PARTIAL_7_OF_9",
+      "candidate_root": "artifacts/macro_r011/gold_fixtures/w1_global_financial_conditions_us_candidate_v1",
+      "candidate_audit": "artifacts/macro_r011/audits/w1_global_financial_conditions_us_gold_candidate_v1.json",
+      "effective_gold_coverage": {
+        "ready_count": 7,
+        "required_count": 9,
+        "ready_series": ["US.EFFR", "US.SOFR", "US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR"],
+        "missing_series": ["USD.CNY", "USD.CNH"]
+      },
+      "frozen_sha256": {
+        "candidate_canonical_v2.parquet": "7738CDF057CE7E6F7E1653CA805A0CC6EDD3B54A8EEFED9EBD4D2F3237BCBBD0",
+        "expected.json": "1458D90A0CBA56C773C057991F903C34432AFEFC94D0444B5254EA3644109351",
+        "source_map.json": "A5BA0561322E21A603322343E1C449AE664E4F2A229C62DF27A65D5D9634E0FC",
+        "manual_audit.json": "32A9AE58857AC1FBDE471D05948E48860CB6F41D3CF2BCD7A37AA9572238B61F",
+        "raw_manifest.json": "293A68F380CD036F2A7CAF6B76C702C80A9C107FD4651AADCE9F6C7F29407231",
+        "candidate_audit": "E5F0CF2AB6192C4CE8330DBC28FB8D7DA6AA342864DE76CB4D7452BDFCB234C0"
+      }
     }
   }
 }

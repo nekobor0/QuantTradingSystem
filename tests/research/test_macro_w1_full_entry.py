@@ -17,6 +17,17 @@ def test_w1_full_entry_has_three_ready_and_three_blocked_packages():
     assert result["decision"] == "MIXED_PACKAGE_READINESS"
     assert result["ready_packages"] == ["pmi_state", "prices", "growth_output"]
     assert result["blocked_packages"] == ["rates_liquidity", "money_credit", "global_financial_conditions"]
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    package = next(item for item in manifest["packages"] if item["package_id"] == "global_financial_conditions")
+    assert package["gold_state"] == "GOLD_BLOCKED_PARTIAL_7_OF_9"
+    assert package["gold_coverage"] == {
+        "ready_count": 7,
+        "required_count": 9,
+        "missing_series": ["USD.CNY", "USD.CNH"],
+    }
+    assert package["full_history_allowed"] is False
+    assert package["formal_curated_written"] is False
+    assert package["research_ready"] is False
 
 
 def _write_full_audit_fixtures(audit_root: Path, *, promoted_complete: bool) -> None:
@@ -333,6 +344,17 @@ def test_global_financial_conditions_cannot_merge_into_rates(tmp_path: Path) -> 
     manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
     package = next(item for item in manifest["packages"] if item["package_id"] == "global_financial_conditions")
     package["independent_from"] = []
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "global_financial_conditions" in result["invalid_packages"]
+
+
+def test_global_financial_conditions_rejects_gold_coverage_tamper(tmp_path: Path) -> None:
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    package = next(item for item in manifest["packages"] if item["package_id"] == "global_financial_conditions")
+    package["gold_coverage"]["ready_count"] = 9
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(manifest), encoding="utf-8")
     result = validate_full_entry(path)

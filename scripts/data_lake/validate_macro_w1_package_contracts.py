@@ -27,7 +27,7 @@ def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, ob
         "all_states_expected": all(
             item["status"].startswith("GOLD_")
             if item["package_id"] != "global_financial_conditions"
-            else item["status"] == "CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED"
+            else item["status"] == "GOLD_BLOCKED_PARTIAL_7_OF_9"
             for item in contracts
         ),
         "all_decisions_frozen": all(
@@ -73,6 +73,18 @@ def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, ob
             and money_by_id[series_id].get("implementation") == "RETIRED_NOT_REQUIRED_NO_DIRECT_MONTHLY_OBSERVATION"
             for series_id in MONEY_RETIRED
         )
+    )
+    global_package = next(item for item in contracts if item["package_id"] == "global_financial_conditions")
+    global_coverage = global_package.get("gold_coverage", {})
+    checks["global_partial_gold_scope_exact"] = (
+        global_package.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
+        and global_coverage.get("ready_count") == 7
+        and global_coverage.get("required_count") == 9
+        and global_coverage.get("missing_series") == ["USD.CNY", "USD.CNH"]
+        and global_package.get("full_history_allowed") is False
+        and global_package.get("formal_execution_allowed") is False
+        and global_package.get("formal_curated_written") is False
+        and global_package.get("research_ready") is False
     )
     failures = sorted(name for name, passed in checks.items() if not passed)
     return {"passed": not failures, "checks": checks, "failures": failures, "package_counts": dict(package_counts)}

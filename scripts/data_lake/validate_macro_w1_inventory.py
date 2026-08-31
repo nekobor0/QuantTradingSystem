@@ -29,6 +29,9 @@ def validate_inventory(path: Path) -> dict[str, object]:
         | set(summary["official_event_history_research_blocked"])
         | set(summary["shadow_blocked"])
     )
+    global_by_id = {
+        item["canonical_id"]: item for item in series if item["package"] == "global_financial_conditions"
+    }
     checks = {
         "version_2": registry["version"] == 2,
         "series_44": len(series) == 44,
@@ -40,6 +43,15 @@ def validate_inventory(path: Path) -> dict[str, object]:
         "advanced_series_registered": advanced.issubset(canonical_ids),
         "not_formally_implemented_39": summary["not_formally_implemented_count"] == 39,
         "canonical_v2_available": summary["canonical_v2_available"] is True,
+        "global_gold_7_of_9_exact": all(
+            global_by_id[series_id]["state"] == "GOLD_READY_FROZEN_CANDIDATE_PIT_C"
+            for series_id in (
+                "US.EFFR", "US.SOFR", "US.TREASURY.3M", "US.TREASURY.2Y",
+                "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR",
+            )
+        )
+        and global_by_id["USD.CNY"]["state"] == "CONTRACT_ONLY"
+        and global_by_id["USD.CNH"]["state"] == "SOURCE_AND_ENTITLEMENT_BLOCKED",
     }
     failures = sorted(name for name, passed in checks.items() if not passed)
     return {

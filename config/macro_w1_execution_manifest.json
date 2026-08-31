@@ -286,7 +286,12 @@
     {
       "package_id": "global_financial_conditions",
       "order": 6,
-      "gold_state": "CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED",
+      "gold_state": "GOLD_BLOCKED_PARTIAL_7_OF_9",
+      "gold_coverage": {
+        "ready_count": 7,
+        "required_count": 9,
+        "missing_series": ["USD.CNY", "USD.CNH"]
+      },
       "shadow_allowed": false,
       "full_history_allowed": false,
       "formal_execution_allowed": false,
@@ -295,7 +300,7 @@
       "frequency_groups": [
         "business_daily"
       ],
-      "shadow_state": "CONTRACT_FROZEN_NO_CANDIDATE",
+      "shadow_state": "GOLD_PARTIAL_7_OF_9_NO_PACKAGE_SHADOW",
       "contract_id": "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1",
       "series_count": 9,
       "independent_from": [
@@ -306,8 +311,16 @@
         "GlobalUSDConditions",
         "FXConstraint"
       ],
+      "gold_candidate_evidence": {
+        "status": "SOL_ACCEPTED_PIT_C_GOLD_7_OF_9",
+        "candidate_rows": 14,
+        "candidate_sha256": "7738CDF057CE7E6F7E1653CA805A0CC6EDD3B54A8EEFED9EBD4D2F3237BCBBD0",
+        "candidate_audit_sha256": "E5F0CF2AB6192C4CE8330DBC28FB8D7DA6AA342864DE76CB4D7452BDFCB234C0",
+        "pit_counts": {"PIT-A": 0, "PIT-C": 14}
+      },
       "full_blockers": [
-        "all nine series require official two-period Gold and full-history evidence",
+        "USD.CNY and USD.CNH still require official two-period Gold evidence",
+        "all nine series still require complete official full-history evidence",
         "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
         "PIT-A release vintages and required regime breaks have not been captured and validated"
       ]

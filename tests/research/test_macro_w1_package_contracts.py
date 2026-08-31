@@ -57,3 +57,16 @@ def test_money_contract_rejects_reactivating_or_deriving_retired_raw_series(tmp_
     result = validate_contracts(contract_root, ROOT / "config" / "macro_w1_confirmation_registry.json")
     assert not result["passed"]
     assert "money_active_required_scope_exact" in result["failures"]
+
+
+def test_global_contract_rejects_partial_gold_or_gate_tamper(tmp_path: Path) -> None:
+    contract_root = tmp_path / "contracts"
+    shutil.copytree(ROOT / "config" / "macro_w1_packages", contract_root)
+    path = contract_root / "global_financial_conditions.json"
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    contract["gold_coverage"]["ready_count"] = 9
+    contract["full_history_allowed"] = True
+    path.write_text(json.dumps(contract), encoding="utf-8")
+    result = validate_contracts(contract_root, ROOT / "config" / "macro_w1_confirmation_registry.json")
+    assert not result["passed"]
+    assert "global_partial_gold_scope_exact" in result["failures"]
