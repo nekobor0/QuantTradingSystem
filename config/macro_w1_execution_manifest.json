@@ -325,11 +325,32 @@
         "raw_manifest_sha256": "9C91B6359DF2F79DDA3BBB8652FA1208EC11E14C2F993314ABD4FC6B4AB2FE1A",
         "blocked_series": ["USD.CNY", "USD.CNH"]
       },
+      "us_full_history_evidence": {
+        "status": "SOL_ACCEPTED_AS_OF_COMPLETE_PIT_C_7_US_SERIES",
+        "candidate_rows": 47276,
+        "candidate_sha256": "FDC500EFAB0DCAD9C5F077FC9FA29DFD97DA1802D13F7C57B64C0EE232F57FEA",
+        "candidate_audit_sha256": "4B0E424E2204ABF7745E3A75BBACE2DC5DD02B4CB8A363FF36936F668E6B6751",
+        "pit_counts": {"PIT-A": 0, "PIT-C": 47276},
+        "fixed_contract_complete_series": ["US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y"],
+        "as_of_complete_series": ["US.EFFR", "US.SOFR", "US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR"],
+        "publication_lag_pending_series": ["US.EFFR", "US.SOFR", "US.BROAD_DOLLAR"],
+        "structural_omission_series": ["US.TREASURY.3M"],
+        "official_calendar_exception_series": ["US.EFFR"]
+      },
+      "series_full_gates": {
+        "US.EFFR": "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+        "US.SOFR": "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+        "US.TREASURY.3M": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+        "US.TREASURY.2Y": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+        "US.TREASURY.10Y": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+        "US.TIPS.REAL.10Y": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+        "US.BROAD_DOLLAR": "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"
+      },
       "full_blockers": [
         "USD.CNY official 16:30 close product is confirmed, but the public historical field is unavailable and member-interface entitlement is not established",
-        "all nine series still require complete official full-history evidence",
         "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
-        "PIT-A release vintages and required regime breaks have not been captured and validated"
+        "the seven US series have accepted series-level PIT-C evidence only; package formal aggregation is not built or authorized",
+        "PIT-A release vintages have not been captured and validated"
       ]
     }
   ],

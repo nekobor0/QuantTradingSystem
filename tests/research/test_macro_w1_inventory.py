@@ -19,7 +19,7 @@ def test_w1_inventory_matches_actual_44_series_state() -> None:
         "growth_output": 3,
         "global_financial_conditions": 9,
     }
-    assert result["state_counts"]["GOLD_READY_FROZEN_CANDIDATE_PIT_C"] == 7
+    assert result["state_counts"]["FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"] == 7
     assert result["state_counts"]["OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"] == 1
 
 

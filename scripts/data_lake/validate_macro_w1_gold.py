@@ -28,6 +28,9 @@ from validate_macro_w1_global_financial_conditions_us_candidate import (  # noqa
     READY_SERIES as GLOBAL_READY_SERIES,
     validate_global_financial_conditions_us_candidate,
 )
+from validate_macro_w1_global_financial_conditions_us_full_candidate import (  # noqa: E402
+    validate_global_financial_conditions_us_full_candidate,
+)
 from validate_macro_w1_global_financial_conditions_fx_candidate import (  # noqa: E402
     FROZEN_HASHES as GLOBAL_FX_FROZEN_HASHES,
     validate_global_financial_conditions_fx_candidate,
@@ -200,12 +203,14 @@ def validate_registry(registry_path: Path) -> dict[str, Any]:
         contract = _load(ROOT / "config" / "macro_w1_packages" / f"{package_id}.json")
         if package_id == "global_financial_conditions":
             candidate = validate_global_financial_conditions_us_candidate()
+            full_candidate = validate_global_financial_conditions_us_full_candidate()
             fx_evidence = validate_global_financial_conditions_fx_candidate()
             coverage = contract.get("gold_coverage", {})
             effective = spec.get("effective_gold_coverage", {})
             evidence = contract.get("gold_candidate_evidence", {})
             checks = {
                 "candidate_evidence_valid": candidate["passed"],
+                "seven_series_full_evidence_valid": full_candidate["passed"],
                 "fx_blocked_evidence_valid": fx_evidence["passed"],
                 "partial_seven_of_nine_exact": contract.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9"
                 and spec.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9"

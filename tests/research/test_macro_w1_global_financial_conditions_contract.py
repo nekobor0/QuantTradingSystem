@@ -45,6 +45,10 @@ def test_global_financial_conditions_contract_passes() -> None:
     assert package["gold_coverage"]["missing_series"] == ["USD.CNY", "USD.CNH"]
     assert package["fx_gold_blocked_evidence"]["candidate_rows"] == 0
     assert package["fx_gold_blocked_evidence"]["candidate_parquet"] is None
+    assert package["us_full_history_evidence"]["as_of_complete_series"] == package["gold_coverage"]["ready_series"]
+    assert set(package["series_full_gates"]) == set(package["gold_coverage"]["ready_series"])
+    assert all(gate["full_history_allowed"] is True for gate in package["series_full_gates"].values())
+    assert all(gate["formal_execution_allowed"] is False for gate in package["series_full_gates"].values())
 
 
 @pytest.mark.parametrize(
@@ -79,6 +83,9 @@ def test_global_financial_conditions_contract_passes() -> None:
         "broad_dollar_resolution_tamper",
         "fx_evidence_tamper",
         "manifest_fx_evidence_tamper",
+        "full_evidence_tamper",
+        "series_gate_tamper",
+        "registry_full_state_tamper",
         "manifest_wrong_order",
         "registry_wrong_source",
     ],
@@ -146,6 +153,13 @@ def test_global_financial_conditions_contract_fails_closed(tmp_path: Path, mutat
         package["fx_gold_blocked_evidence"]["candidate_rows"] = 1
     elif mutation == "manifest_fx_evidence_tamper":
         manifest_package["fx_gold_blocked_evidence"]["candidate_rows"] = 1
+    elif mutation == "full_evidence_tamper":
+        package["us_full_history_evidence"]["structural_omissions"]["US.TREASURY.3M"] = []
+    elif mutation == "series_gate_tamper":
+        package["series_full_gates"]["US.EFFR"]["formal_execution_allowed"] = True
+    elif mutation == "registry_full_state_tamper":
+        item = next(item for item in registry["series"] if item["canonical_id"] == "US.EFFR")
+        item["state"] = "GOLD_READY_FROZEN_CANDIDATE_PIT_C"
     elif mutation == "manifest_wrong_order":
         manifest_package["order"] = 5
     elif mutation == "registry_wrong_source":

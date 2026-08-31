@@ -3,7 +3,7 @@
   "contract_id": "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1",
   "package_id": "global_financial_conditions",
   "status": "GOLD_BLOCKED_PARTIAL_7_OF_9",
-  "accepted_decisions": ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4"],
+  "accepted_decisions": ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4", "GFC_D5"],
   "independent_from": ["rates_liquidity"],
   "source_whitelist": ["NYFED_MARKETS", "US_TREASURY", "FEDERAL_RESERVE_H10", "CFETS_CHINAMONEY"],
   "primary_key": ["series_id", "reference_period", "vintage_id"],
@@ -56,6 +56,44 @@
     "usd_cny_resolution": "official_1630_close_product_confirmed_but_public_historical_field_unavailable_and_member_interface_entitlement_not_established",
     "usd_cnh_resolution": "official_historical_source_matched_observation_time_and_entitlement_unresolved",
     "diagnostic_values_are_not_candidate_evidence": true
+  },
+  "us_full_history_evidence": {
+    "status": "SOL_ACCEPTED_AS_OF_COMPLETE_PIT_C_7_US_SERIES",
+    "candidate_path": "artifacts/macro_r011/shadow/w1_global_financial_conditions_us_full_candidate.parquet",
+    "candidate_audit": "artifacts/macro_r011/audits/w1_global_financial_conditions_us_full_candidate.json",
+    "candidate_rows": 47276,
+    "raw_file_sha_closure": "64/64",
+    "raw_sha_closure": "47276/47276",
+    "pit_counts": {"PIT-A": 0, "PIT-C": 47276},
+    "fixed_contract_complete_series": ["US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y"],
+    "as_of_complete_series": ["US.EFFR", "US.SOFR", "US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR"],
+    "publication_lag_pending_series": ["US.EFFR", "US.SOFR", "US.BROAD_DOLLAR"],
+    "structural_omissions": {
+      "US.TREASURY.3M": ["2008-12-10", "2008-12-18", "2008-12-24"]
+    },
+    "official_calendar_exceptions": {
+      "US.EFFR": [{"reference_period":"2003-07-20","value":1.02,"raw_sha256":"0C7B8054A99F66A763059577264B48FAE827F5F44F140E4A0EE3F021BB4AC47A"}]
+    },
+    "broad_dollar_nd_counts": {"official_holiday_or_market_closure":186,"official_non_observation":25,"methodology_or_source_break":0,"unexplained_missing":0},
+    "unexplained_missing_by_series": {"US.EFFR":[],"US.SOFR":[],"US.TREASURY.3M":[],"US.TREASURY.2Y":[],"US.TREASURY.10Y":[],"US.TIPS.REAL.10Y":[],"US.BROAD_DOLLAR":[]},
+    "frozen_sha256": {
+      "candidate_parquet": "FDC500EFAB0DCAD9C5F077FC9FA29DFD97DA1802D13F7C57B64C0EE232F57FEA",
+      "candidate_audit": "4B0E424E2204ABF7745E3A75BBACE2DC5DD02B4CB8A363FF36936F668E6B6751",
+      "expected.json": "168C0C22704CBC51E79001150EA64908A24B1C3F9330C08187DC09F4E4386DB5",
+      "source_map.json": "18412E3D492CF8597AF820B2075C78BEDEC55878C0AACDEBCD560B6093B413E9",
+      "manual_audit.json": "7B38EE270B7EB08D6AC9630402F42F7155958FFAAE891EC322531B4922E08A9B",
+      "request_evidence_log.json": "1D4B9C232BC175CF795367BF21AF13BC7B47C77C36EBF7A08E5AF596373E0A61",
+      "raw_manifest.json": "14B40F83AD4460262C056A4FC0D39B8DF877FFC0D1B39972ED969640720FC695"
+    }
+  },
+  "series_full_gates": {
+    "US.EFFR": {"status":"AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"release_aware_as_of","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
+    "US.SOFR": {"status":"AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"release_aware_as_of","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
+    "US.TREASURY.3M": {"status":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"fixed_contract_with_official_structural_omissions","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
+    "US.TREASURY.2Y": {"status":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"fixed_contract","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
+    "US.TREASURY.10Y": {"status":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"fixed_contract","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
+    "US.TIPS.REAL.10Y": {"status":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"fixed_contract","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false},
+    "US.BROAD_DOLLAR": {"status":"AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED","completion_basis":"release_aware_as_of_with_official_non_observations","full_history_allowed":true,"formal_execution_allowed":false,"formal_curated_written":false,"research_ready":false}
   },
   "shadow_allowed": false,
   "full_history_allowed": false,
@@ -118,15 +156,15 @@
     "partial_evidence_cannot_promote_gate": true
   },
   "series": [
-    {"series_id":"US.EFFR","source":"NYFED_MARKETS","official_field":"percentRate","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"overnight_unsecured_transaction_volume_weighted_median","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"series_id":"US.SOFR","source":"NYFED_MARKETS","official_field":"percentRate","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"overnight_treasury_repo_transaction_volume_weighted_median","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"series_id":"US.TREASURY.3M","source":"US_TREASURY","official_field":"BC_3MONTH","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_par_yield_curve","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"series_id":"US.TREASURY.2Y","source":"US_TREASURY","official_field":"BC_2YEAR","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_par_yield_curve","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"series_id":"US.TREASURY.10Y","source":"US_TREASURY","official_field":"BC_10YEAR","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_par_yield_curve","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"series_id":"US.TIPS.REAL.10Y","source":"US_TREASURY","official_field":"TC_10YEAR","frequency":"business_daily","unit":"percent_per_annum_real","measure_basis":"daily_par_real_yield_curve","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"series_id":"US.BROAD_DOLLAR","source":"FEDERAL_RESERVE_H10","official_field":"H10/H10/JRXWTFB_N.B","frequency":"business_daily","unit":"index_2006_100","measure_basis":"nominal_trade_weighted_broad_dollar_index","pit_grade":"C_GOLD_FROZEN_PENDING_FULL_HISTORY","license_scope":"internal_research","implementation":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"series_id":"US.EFFR","source":"NYFED_MARKETS","official_field":"percentRate","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"overnight_unsecured_transaction_volume_weighted_median","pit_grade":"C_FULL_HISTORY_EVIDENCE_ACCEPTED","license_scope":"internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"series_id":"US.SOFR","source":"NYFED_MARKETS","official_field":"percentRate","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"overnight_treasury_repo_transaction_volume_weighted_median","pit_grade":"C_FULL_HISTORY_EVIDENCE_ACCEPTED","license_scope":"internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"series_id":"US.TREASURY.3M","source":"US_TREASURY","official_field":"BC_3MONTH","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_par_yield_curve","pit_grade":"C_FULL_HISTORY_EVIDENCE_ACCEPTED","license_scope":"internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"series_id":"US.TREASURY.2Y","source":"US_TREASURY","official_field":"BC_2YEAR","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_par_yield_curve","pit_grade":"C_FULL_HISTORY_EVIDENCE_ACCEPTED","license_scope":"internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"series_id":"US.TREASURY.10Y","source":"US_TREASURY","official_field":"BC_10YEAR","frequency":"business_daily","unit":"percent_per_annum","measure_basis":"daily_par_yield_curve","pit_grade":"C_FULL_HISTORY_EVIDENCE_ACCEPTED","license_scope":"internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"series_id":"US.TIPS.REAL.10Y","source":"US_TREASURY","official_field":"TC_10YEAR","frequency":"business_daily","unit":"percent_per_annum_real","measure_basis":"daily_par_real_yield_curve","pit_grade":"C_FULL_HISTORY_EVIDENCE_ACCEPTED","license_scope":"internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"series_id":"US.BROAD_DOLLAR","source":"FEDERAL_RESERVE_H10","official_field":"H10/H10/JRXWTFB_N.B","frequency":"business_daily","unit":"index_2006_100","measure_basis":"nominal_trade_weighted_broad_dollar_index","pit_grade":"C_FULL_HISTORY_EVIDENCE_ACCEPTED","license_scope":"internal_research","implementation":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
     {"series_id":"USD.CNY","source":"CFETS_CHINAMONEY","official_field":"USD_CNY_1630_SPOT_CLOSE","frequency":"business_daily","unit":"cny_per_usd","measure_basis":"official_interbank_spot_closing_price_1630","pit_grade":"C_ACCESS_BLOCKED_NO_ACCEPTED_ROWS","license_scope":"member_interface_entitlement_not_established","implementation":"OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"},
     {"series_id":"USD.CNH","source":"CFETS_CHINAMONEY","official_field":"UNRESOLVED_OFFICIAL_USD_CNH_SPOT_CLOSE","frequency":"business_daily","unit":"cnh_per_usd","measure_basis":"offshore_spot_close_target_matched_timestamp","pit_grade":"C_SOURCE_BLOCKED","license_scope":"entitlement_unresolved","implementation":"SOURCE_AND_ENTITLEMENT_BLOCKED"}
   ],
-  "readiness_rule": "all nine series require official Gold, exact calendars, raw closure, PIT/as-of evidence and regime-version validation before any full-history or research gate"
+  "readiness_rule": "seven US series have independent PIT-C full-history evidence gates; the package remains blocked until both FX series and package-level formal/research authorization are complete"
 }

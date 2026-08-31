@@ -103,9 +103,9 @@ MONEY_FULL_BLOCKERS = [
 ]
 GLOBAL_FINANCIAL_CONDITIONS_BLOCKERS = [
     "USD.CNY official 16:30 close product is confirmed, but the public historical field is unavailable and member-interface entitlement is not established",
-    "all nine series still require complete official full-history evidence",
     "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
-    "PIT-A release vintages and required regime breaks have not been captured and validated",
+    "the seven US series have accepted series-level PIT-C evidence only; package formal aggregation is not built or authorized",
+    "PIT-A release vintages have not been captured and validated",
 ]
 GLOBAL_FINANCIAL_CONDITIONS_GOLD_COVERAGE = {
     "ready_count": 7,
@@ -125,6 +125,27 @@ GLOBAL_FINANCIAL_CONDITIONS_FX_BLOCKED_EVIDENCE = {
     "candidate_audit_sha256": "CE3E0745875C1F4A2E9580D12BBE3BA7013917F9ECB0BA75CD70D507D1104BF8",
     "raw_manifest_sha256": "9C91B6359DF2F79DDA3BBB8652FA1208EC11E14C2F993314ABD4FC6B4AB2FE1A",
     "blocked_series": ["USD.CNY", "USD.CNH"],
+}
+GLOBAL_US_FULL_EVIDENCE = {
+    "status": "SOL_ACCEPTED_AS_OF_COMPLETE_PIT_C_7_US_SERIES",
+    "candidate_rows": 47276,
+    "candidate_sha256": "FDC500EFAB0DCAD9C5F077FC9FA29DFD97DA1802D13F7C57B64C0EE232F57FEA",
+    "candidate_audit_sha256": "4B0E424E2204ABF7745E3A75BBACE2DC5DD02B4CB8A363FF36936F668E6B6751",
+    "pit_counts": {"PIT-A": 0, "PIT-C": 47276},
+    "fixed_contract_complete_series": ["US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y"],
+    "as_of_complete_series": ["US.EFFR", "US.SOFR", "US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR"],
+    "publication_lag_pending_series": ["US.EFFR", "US.SOFR", "US.BROAD_DOLLAR"],
+    "structural_omission_series": ["US.TREASURY.3M"],
+    "official_calendar_exception_series": ["US.EFFR"],
+}
+GLOBAL_US_SERIES_GATES = {
+    "US.EFFR": "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "US.SOFR": "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "US.TREASURY.3M": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "US.TREASURY.2Y": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "US.TREASURY.10Y": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "US.TIPS.REAL.10Y": "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
+    "US.BROAD_DOLLAR": "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED",
 }
 MONEY_AFRE_SERIES_ID = "CN.TSF.RMB_LOANS.FLOW"
 MONEY_AFRE_START = "2002-01"
@@ -444,6 +465,10 @@ def _global_financial_conditions_blocked_gate_errors(package: dict[str, Any]) ->
         errors.append(_blocker("GLOBAL_GOLD_EVIDENCE_MISMATCH", "global financial conditions must retain the frozen 14-row PIT-C candidate evidence"))
     if package.get("fx_gold_blocked_evidence") != GLOBAL_FINANCIAL_CONDITIONS_FX_BLOCKED_EVIDENCE:
         errors.append(_blocker("GLOBAL_FX_BLOCKED_EVIDENCE_MISMATCH", "global financial conditions must retain the frozen zero-row official FX evidence boundary"))
+    if package.get("us_full_history_evidence") != GLOBAL_US_FULL_EVIDENCE:
+        errors.append(_blocker("GLOBAL_US_FULL_EVIDENCE_MISMATCH", "the seven U.S. series must retain the frozen release-aware PIT-C evidence decision"))
+    if package.get("series_full_gates") != GLOBAL_US_SERIES_GATES:
+        errors.append(_blocker("GLOBAL_US_SERIES_GATES_MISMATCH", "the seven U.S. series-level gates must remain independent and formal-disabled"))
     if package.get("contract_id") != "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1" or package.get("series_count") != 9:
         errors.append(_blocker("GLOBAL_CONTRACT_IDENTITY_MISMATCH", "global financial conditions must retain the frozen nine-series V1 identity"))
     if package.get("independent_from") != ["rates_liquidity"]:

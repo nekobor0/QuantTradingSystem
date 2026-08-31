@@ -44,7 +44,7 @@ def validate_inventory(path: Path) -> dict[str, object]:
         "not_formally_implemented_39": summary["not_formally_implemented_count"] == 39,
         "canonical_v2_available": summary["canonical_v2_available"] is True,
         "global_gold_7_of_9_exact": all(
-            global_by_id[series_id]["state"] == "GOLD_READY_FROZEN_CANDIDATE_PIT_C"
+            global_by_id[series_id]["state"] == "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"
             for series_id in (
                 "US.EFFR", "US.SOFR", "US.TREASURY.3M", "US.TREASURY.2Y",
                 "US.TREASURY.10Y", "US.TIPS.REAL.10Y", "US.BROAD_DOLLAR",

@@ -36,7 +36,7 @@ LAYERS = {
     "FXConstraint": ["USD.CNY", "USD.CNH"],
 }
 SOURCES = ["NYFED_MARKETS", "US_TREASURY", "FEDERAL_RESERVE_H10", "CFETS_CHINAMONEY"]
-DECISIONS = ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4"]
+DECISIONS = ["GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4", "GFC_D5"]
 WINDOWS = {
     "US.EFFR": ("2000-07-03", "nyfed_unsecured_reference_rate_business_days"),
     "US.SOFR": ("2018-04-02", "sifma_us_government_securities_business_days"),
@@ -72,9 +72,9 @@ SERIES_FIELDS = {
 }
 MANIFEST_BLOCKERS = [
     "USD.CNY official 16:30 close product is confirmed, but the public historical field is unavailable and member-interface entitlement is not established",
-    "all nine series still require complete official full-history evidence",
     "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
-    "PIT-A release vintages and required regime breaks have not been captured and validated",
+    "the seven US series have accepted series-level PIT-C evidence only; package formal aggregation is not built or authorized",
+    "PIT-A release vintages have not been captured and validated",
 ]
 FX_EVIDENCE_HASHES = {
     "candidate_audit": "CE3E0745875C1F4A2E9580D12BBE3BA7013917F9ECB0BA75CD70D507D1104BF8",
@@ -111,6 +111,26 @@ GOLD_EVIDENCE_HASHES = {
     "manual_audit.json": "32A9AE58857AC1FBDE471D05948E48860CB6F41D3CF2BCD7A37AA9572238B61F",
     "raw_manifest.json": "293A68F380CD036F2A7CAF6B76C702C80A9C107FD4651AADCE9F6C7F29407231",
     "candidate_audit": "E5F0CF2AB6192C4CE8330DBC28FB8D7DA6AA342864DE76CB4D7452BDFCB234C0",
+}
+US_FULL_EVIDENCE_SUMMARY = {
+    "status": "SOL_ACCEPTED_AS_OF_COMPLETE_PIT_C_7_US_SERIES",
+    "candidate_rows": 47276,
+    "candidate_sha256": "FDC500EFAB0DCAD9C5F077FC9FA29DFD97DA1802D13F7C57B64C0EE232F57FEA",
+    "candidate_audit_sha256": "4B0E424E2204ABF7745E3A75BBACE2DC5DD02B4CB8A363FF36936F668E6B6751",
+    "pit_counts": {"PIT-A": 0, "PIT-C": 47276},
+    "fixed_contract_complete_series": ["US.TREASURY.3M", "US.TREASURY.2Y", "US.TREASURY.10Y", "US.TIPS.REAL.10Y"],
+    "as_of_complete_series": READY_SERIES,
+    "publication_lag_pending_series": ["US.EFFR", "US.SOFR", "US.BROAD_DOLLAR"],
+    "structural_omission_series": ["US.TREASURY.3M"],
+    "official_calendar_exception_series": ["US.EFFR"],
+}
+SERIES_GATE_STATUS = {
+    series_id: (
+        "AS_OF_FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"
+        if series_id in {"US.EFFR", "US.SOFR", "US.BROAD_DOLLAR"}
+        else "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"
+    )
+    for series_id in READY_SERIES
 }
 
 
@@ -236,12 +256,29 @@ def validate_global_financial_conditions_contract(
             "resolution": "official_preview_label_conflicts_with_post_2019_H10_methodology; values accepted without rescaling as the post-2019 nominal broad dollar index indexed to January 2006",
             "old_goods_only_broad_index_forbidden": True,
         }
-        and all(
-            series_by_id[series_id].get("pit_grade") == "C_GOLD_FROZEN_PENDING_FULL_HISTORY"
-            and series_by_id[series_id].get("implementation") == "GOLD_READY_FROZEN_CANDIDATE_PIT_C"
-            for series_id in READY_SERIES
-        )
+        and all(series_by_id[series_id].get("pit_grade") == "C_FULL_HISTORY_EVIDENCE_ACCEPTED"
+                and series_by_id[series_id].get("implementation") == "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"
+                for series_id in READY_SERIES)
         and fx_evidence == FX_BLOCKED_EVIDENCE
+    )
+    series_gates = package.get("series_full_gates")
+    full_evidence = package.get("us_full_history_evidence")
+    series_full_evidence_exact = (
+        isinstance(series_gates, dict)
+        and set(series_gates) == set(READY_SERIES)
+        and all(series_gates[series_id].get("status") == SERIES_GATE_STATUS[series_id]
+                and series_gates[series_id].get("full_history_allowed") is True
+                and all(series_gates[series_id].get(field) is False for field in ("formal_execution_allowed", "formal_curated_written", "research_ready"))
+                for series_id in READY_SERIES)
+        and isinstance(full_evidence, dict)
+        and full_evidence.get("status") == US_FULL_EVIDENCE_SUMMARY["status"]
+        and full_evidence.get("candidate_rows") == 47276
+        and full_evidence.get("pit_counts") == {"PIT-A": 0, "PIT-C": 47276}
+        and full_evidence.get("fixed_contract_complete_series") == US_FULL_EVIDENCE_SUMMARY["fixed_contract_complete_series"]
+        and full_evidence.get("as_of_complete_series") == READY_SERIES
+        and full_evidence.get("publication_lag_pending_series") == US_FULL_EVIDENCE_SUMMARY["publication_lag_pending_series"]
+        and full_evidence.get("structural_omissions", {}).get("US.TREASURY.3M") == ["2008-12-10", "2008-12-18", "2008-12-24"]
+        and full_evidence.get("official_calendar_exceptions", {}).get("US.EFFR", [{}])[0].get("reference_period") == "2003-07-20"
     )
     manifest_exact = (
         len(manifest_matches) == 1
@@ -260,6 +297,8 @@ def validate_global_financial_conditions_contract(
             "raw_manifest_sha256": FX_EVIDENCE_HASHES["raw_manifest.json"],
             "blocked_series": MISSING_SERIES,
         }
+        and manifest_package.get("us_full_history_evidence") == US_FULL_EVIDENCE_SUMMARY
+        and manifest_package.get("series_full_gates") == SERIES_GATE_STATUS
         and manifest_package.get("full_blockers") == MANIFEST_BLOCKERS
         and all(manifest_package.get(field) is False for field in ("shadow_allowed", "full_history_allowed", "formal_execution_allowed", "formal_curated_written", "research_ready"))
     )
@@ -271,7 +310,7 @@ def validate_global_financial_conditions_contract(
             registered.get(series_id, {}).get("package") == "global_financial_conditions"
             and registered.get(series_id, {}).get("source") == series_by_id.get(series_id, {}).get("source")
             and registered.get(series_id, {}).get("state") == (
-                "GOLD_READY_FROZEN_CANDIDATE_PIT_C" if series_id in READY_SERIES
+                "FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED" if series_id in READY_SERIES
                 else "OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED" if series_id == "USD.CNY"
                 else "SOURCE_AND_ENTITLEMENT_BLOCKED"
             )
@@ -293,6 +332,7 @@ def validate_global_financial_conditions_contract(
         "candidate_rules_fail_closed": no_proxy_fill,
         "fx_semantic_boundary": fx_boundary,
         "gold_evidence_frozen_7_of_9": gold_evidence_exact,
+        "seven_series_full_evidence_gates": series_full_evidence_exact,
         "package_states_blocked": fail_closed_states and package.get("status") == "GOLD_BLOCKED_PARTIAL_7_OF_9",
         "manifest_state_exact": manifest_exact,
         "registry_union_exact": registry_exact,

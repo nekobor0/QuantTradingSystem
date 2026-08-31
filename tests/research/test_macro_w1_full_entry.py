@@ -373,3 +373,15 @@ def test_global_financial_conditions_rejects_fx_blocked_evidence_tamper(tmp_path
     result = validate_full_entry(path)
     assert not result["passed"]
     assert "global_financial_conditions" in result["invalid_packages"]
+
+
+@pytest.mark.parametrize("field", ["us_full_history_evidence", "series_full_gates"])
+def test_global_financial_conditions_rejects_us_full_gate_tamper(tmp_path: Path, field: str) -> None:
+    manifest = json.loads((ROOT / "config" / "macro_w1_execution_manifest.json").read_text(encoding="utf-8"))
+    package = next(item for item in manifest["packages"] if item["package_id"] == "global_financial_conditions")
+    package[field] = {}
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = validate_full_entry(path)
+    assert not result["passed"]
+    assert "global_financial_conditions" in result["invalid_packages"]

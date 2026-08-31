@@ -9,7 +9,7 @@ from pathlib import Path
 EXPECTED = {"rates_liquidity": 11, "pmi_state": 8, "prices": 5, "money_credit": 8, "growth_output": 3, "global_financial_conditions": 9}
 COMMON_DECISIONS = {f"W1_D{number}" for number in range(1, 10)}
 MONEY_DECISIONS = COMMON_DECISIONS | {"W1_D10", "W1_D11"}
-GLOBAL_DECISIONS = {f"GFC_D{number}" for number in range(1, 5)}
+GLOBAL_DECISIONS = {f"GFC_D{number}" for number in range(1, 6)}
 MONEY_RETIRED = {"CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"}
 
 

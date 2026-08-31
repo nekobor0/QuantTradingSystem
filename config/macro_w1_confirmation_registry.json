@@ -83,17 +83,17 @@
     {"id":"gdp_nominal","canonical_id":"CN.GDP.NOMINAL.YTD","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"100m_cny","existing":"cn_gdp.parquet:gdp","state":"FIELD_MAPPED_DEFINITION_GATE"},
     {"id":"gdp_real_yoy","canonical_id":"CN.GDP.REAL.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"percent_yoy","existing":"cn_gdp.parquet:gdp_yoy","state":"FIELD_MAPPED"},
     {"id":"industrial_va_yoy","canonical_id":"CN.INDUSTRIAL.VA.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"monthly_with_jan_feb_joint","unit":"percent_yoy","existing":null,"state":"NEEDS_ADAPTER_PERIOD_SPAN_GATE"},
-    {"id":"us_effr","canonical_id":"US.EFFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"id":"us_sofr","canonical_id":"US.SOFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"id":"us_treasury_3m","canonical_id":"US.TREASURY.3M","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"id":"us_treasury_2y","canonical_id":"US.TREASURY.2Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"id":"us_treasury_10y","canonical_id":"US.TREASURY.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"id":"us_tips_real_10y","canonical_id":"US.TIPS.REAL.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum_real","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
-    {"id":"us_broad_dollar","canonical_id":"US.BROAD_DOLLAR","package":"global_financial_conditions","source":"FEDERAL_RESERVE_H10","frequency":"business_daily","unit":"index_2006_100","existing":null,"state":"GOLD_READY_FROZEN_CANDIDATE_PIT_C"},
+    {"id":"us_effr","canonical_id":"US.EFFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"id":"us_sofr","canonical_id":"US.SOFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"id":"us_treasury_3m","canonical_id":"US.TREASURY.3M","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"id":"us_treasury_2y","canonical_id":"US.TREASURY.2Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"id":"us_treasury_10y","canonical_id":"US.TREASURY.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"id":"us_tips_real_10y","canonical_id":"US.TIPS.REAL.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum_real","existing":null,"state":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
+    {"id":"us_broad_dollar","canonical_id":"US.BROAD_DOLLAR","package":"global_financial_conditions","source":"FEDERAL_RESERVE_H10","frequency":"business_daily","unit":"index_2006_100","existing":null,"state":"FULL_HISTORY_EVIDENCE_ACCEPTED_PIT_C_FORMAL_NOT_AUTHORIZED"},
     {"id":"usd_cny","canonical_id":"USD.CNY","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cny_per_usd","existing":null,"state":"OFFICIAL_PRODUCT_CONFIRMED_ENTITLEMENT_BLOCKED"},
     {"id":"usd_cnh","canonical_id":"USD.CNH","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cnh_per_usd","existing":null,"state":"SOURCE_AND_ENTITLEMENT_BLOCKED"}
   ],
-  "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10", "W1_D11", "GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4"],
+  "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10", "W1_D11", "GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4", "GFC_D5"],
   "confirmation_decisions": [
     {"id":"W1_D1","topic":"amount_units","recommended":"store official 100m_cny for GDP, money and flow series; derive trillion_cny only in feature layer"},
     {"id":"W1_D2","topic":"gdp_nominal_grain","recommended":"canonical official YTD cumulative value plus separately derived single-quarter value; never label YTD as quarter-only"},
@@ -109,6 +109,7 @@
     {"id":"GFC_D1","topic":"independent_package_boundary","recommended":"global_financial_conditions is independent from China rates_liquidity and is decomposed into DomesticLiquidity, GlobalUSDConditions, and FXConstraint"},
     {"id":"GFC_D2","topic":"official_source_precedence","recommended":"use New York Fed, US Treasury, Federal Reserve H10, and CFETS official observations; adapters and aggregators are transport only and never replace raw official evidence"},
     {"id":"GFC_D3","topic":"cross_market_pit","recommended":"store reference, release, available, and tradable timestamps separately in UTC; never use a US observation in a China decision before its tradable timestamp"},
-    {"id":"GFC_D4","topic":"fx_semantic_boundary","recommended":"USD.CNY is the CFETS 16:30 onshore spot close; USD.CNH requires a matched-timestamp official offshore source and may not be proxied by CNY or third-party series"}
+    {"id":"GFC_D4","topic":"fx_semantic_boundary","recommended":"USD.CNY is the CFETS 16:30 onshore spot close; USD.CNH requires a matched-timestamp official offshore source and may not be proxied by CNY or third-party series"},
+    {"id":"GFC_D5","topic":"release_aware_as_of_full_history","recommended":"series-level PIT-C full-history evidence may be complete through the latest officially available reference period at evidence_as_of; publication lag, official structural omissions and source-calendar exceptions must remain explicit and cannot promote package formal or research gates"}
   ]
 }

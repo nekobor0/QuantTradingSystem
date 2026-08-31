@@ -21,7 +21,7 @@ def validate(registry_path: Path, universe_path: Path) -> dict[str, object]:
     decision_ids = [row["id"] for row in registry["confirmation_decisions"]]
     china_ids = [row["id"] for row in rows if row["package"] != "global_financial_conditions"]
     global_ids = [row["canonical_id"] for row in rows if row["package"] == "global_financial_conditions"]
-    expected_decisions = [f"W1_D{number}" for number in range(1, 12)] + [f"GFC_D{number}" for number in range(1, 5)]
+    expected_decisions = [f"W1_D{number}" for number in range(1, 12)] + [f"GFC_D{number}" for number in range(1, 6)]
     checks = {
         "declared_count_is_44": registry["series_count"] == 44,
         "exactly_44_series": len(rows) == 44,
