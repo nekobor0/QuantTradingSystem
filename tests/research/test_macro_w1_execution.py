@@ -82,7 +82,7 @@ def test_pmi_prices_and_growth_full_history_are_allowed_with_two_packages_blocke
     result = validate_full_entry(ROOT / "config" / "macro_w1_execution_manifest.json")
     assert result["passed"] is True
     assert result["ready_packages"] == ["pmi_state", "prices", "growth_output"]
-    assert result["blocked_packages"] == ["rates_liquidity", "money_credit"]
+    assert result["blocked_packages"] == ["rates_liquidity", "money_credit", "global_financial_conditions"]
     assert result["invalid_packages"] == []
     assert result["all_packages_ready"] is False
 
@@ -153,7 +153,7 @@ def test_full_entry_accepts_one_ready_package_when_prices_is_temporarily_blocked
     result = validate_full_entry(path)
     assert result["passed"] is True
     assert result["ready_packages"] == ["pmi_state", "growth_output"]
-    assert result["blocked_packages"] == ["rates_liquidity", "prices", "money_credit"]
+    assert result["blocked_packages"] == ["rates_liquidity", "prices", "money_credit", "global_financial_conditions"]
     assert result["invalid_packages"] == []
     assert result["all_packages_ready"] is False
     assert result["full_entry_ready"] is False

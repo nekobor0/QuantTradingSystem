@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from quant_trading_system.research.macro_data.w1_execution import validate_audit
 
 
-EXPECTED_PACKAGES = ["rates_liquidity", "pmi_state", "prices", "money_credit", "growth_output"]
+EXPECTED_PACKAGES = ["rates_liquidity", "pmi_state", "prices", "money_credit", "growth_output", "global_financial_conditions"]
 GROWTH_START = "1992-01"
 GROWTH_END = "2026-07"
 GROWTH_SCOPE = "pit_a_release_plus_pit_c_frozen_manual_official_exports"
@@ -100,6 +100,11 @@ MONEY_RETIRED_SERIES = ["CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"]
 MONEY_FULL_BLOCKERS = [
     "M1, M2, TSF flow, TSF stock, and TSF government-bond full-history contract is frozen but official evidence candidates are not accepted",
     "package-level money_credit formal aggregation is not built; CN.TSF.RMB_LOANS.FLOW is complete only at series level",
+]
+GLOBAL_FINANCIAL_CONDITIONS_BLOCKERS = [
+    "all nine series require official two-period Gold and full-history evidence",
+    "USD.CNH exact official historical source, matched observation time, and entitlement remain unresolved",
+    "PIT-A release vintages and required regime breaks have not been captured and validated",
 ]
 MONEY_AFRE_SERIES_ID = "CN.TSF.RMB_LOANS.FLOW"
 MONEY_AFRE_START = "2002-01"
@@ -409,6 +414,29 @@ def _money_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
     return errors
 
 
+def _global_financial_conditions_blocked_gate_errors(package: dict[str, Any]) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    if package.get("gold_state") != "CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED":
+        errors.append(_blocker("GLOBAL_GOLD_STATE_MISMATCH", "global financial conditions must remain contract-only before official Gold"))
+    if package.get("contract_id") != "R011.W1.GLOBAL_FINANCIAL_CONDITIONS.V1" or package.get("series_count") != 9:
+        errors.append(_blocker("GLOBAL_CONTRACT_IDENTITY_MISMATCH", "global financial conditions must retain the frozen nine-series V1 identity"))
+    if package.get("independent_from") != ["rates_liquidity"]:
+        errors.append(_blocker("GLOBAL_PACKAGE_BOUNDARY_MISMATCH", "global financial conditions must remain independent from rates_liquidity"))
+    if package.get("layers") != ["DomesticLiquidity", "GlobalUSDConditions", "FXConstraint"]:
+        errors.append(_blocker("GLOBAL_LAYER_SCOPE_MISMATCH", "global financial conditions layers must match the frozen decomposition"))
+    if package.get("full_history_allowed") is not False or package.get("shadow_allowed") is not False:
+        errors.append(_blocker("GLOBAL_PREMATURE_GATE_PROMOTION", "global financial conditions cannot enter shadow or full history before official evidence"))
+    if package.get("formal_execution_allowed") is not False or package.get("formal_curated_written") is not False:
+        errors.append(_blocker("GLOBAL_FORMAL_WRITE_FORBIDDEN", "global financial conditions formal execution must remain disabled"))
+    if package.get("research_ready") is not False:
+        errors.append(_blocker("GLOBAL_RESEARCH_READY_FORBIDDEN", "global financial conditions cannot be research ready"))
+    if package.get("shadow_state") != "CONTRACT_FROZEN_NO_CANDIDATE":
+        errors.append(_blocker("GLOBAL_SHADOW_STATE_MISMATCH", "global financial conditions must remain contract-only without a candidate"))
+    if package.get("full_blockers") != GLOBAL_FINANCIAL_CONDITIONS_BLOCKERS:
+        errors.append(_blocker("GLOBAL_FULL_BLOCKERS_MISMATCH", "global financial conditions blockers must match the frozen evidence boundary"))
+    return errors
+
+
 def check_money_afre_full_gate_v2(
     manifest_path: Path,
     start: str = MONEY_AFRE_START,
@@ -524,6 +552,8 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
             errors.extend(_rates_blocked_gate_errors(package))
         if package_id == "money_credit":
             errors.extend(_money_blocked_gate_errors(package))
+        if package_id == "global_financial_conditions":
+            errors.extend(_global_financial_conditions_blocked_gate_errors(package))
         if allowed is True:
             if package_id == "pmi_state":
                 errors.extend(_package_gate_errors(package, required_start="2009-06", required_end="2026-07", required_scope="official_release_vintage"))
@@ -565,7 +595,7 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
     checks = {
         "gate_v2_schema": type(manifest.get("schema_version")) is int and manifest.get("schema_version") == 2 and type(manifest.get("gate_version")) is int and manifest.get("gate_version") == 2,
         "pmi_prices_have_gate_v2_windows": all(isinstance(package_by_id.get(package_id, {}).get("full_window"), dict) for package_id in ("pmi_state", "prices")),
-        "five_packages_ordered": package_ids == EXPECTED_PACKAGES,
+        "six_packages_ordered": package_ids == EXPECTED_PACKAGES,
         "blocked_packages_have_specific_full_blockers": all(
             isinstance(package_by_id.get(package_id), dict)
             and isinstance(package_by_id[package_id].get("full_blockers"), list)
@@ -585,7 +615,20 @@ def validate_full_entry(manifest_path: Path, audit_root: Path | None = None) -> 
     if audit_root is not None:
         for package in packages if isinstance(packages, list) else []:
             package_id = package["package_id"]
-            audit = _load(audit_root / f"w1_{package_id}_full.json")["audit"]
+            audit_path = audit_root / f"w1_{package_id}_full.json"
+            if package_id == "global_financial_conditions" and not audit_path.exists():
+                audits[package_id] = {
+                    "schema_valid": True,
+                    "audit_present": False,
+                    "contract_only": True,
+                    "blocked": True,
+                    "research_ready": False,
+                    "execution_pending": False,
+                    "execution_complete": False,
+                    "specific_blockers_match": True,
+                }
+                continue
+            audit = _load(audit_path)["audit"]
             details = {item["detail"] for item in audit["blockers"] if item["code"] == "FULL_HISTORY_NOT_ALLOWED"}
             blocker_codes = {item["code"] for item in audit["blockers"]}
             package_allowed = package.get("full_history_allowed") is True

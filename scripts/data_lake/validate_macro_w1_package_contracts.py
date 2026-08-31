@@ -6,9 +6,10 @@ from collections import Counter
 from pathlib import Path
 
 
-EXPECTED = {"rates_liquidity": 11, "pmi_state": 8, "prices": 5, "money_credit": 8, "growth_output": 3}
+EXPECTED = {"rates_liquidity": 11, "pmi_state": 8, "prices": 5, "money_credit": 8, "growth_output": 3, "global_financial_conditions": 9}
 COMMON_DECISIONS = {f"W1_D{number}" for number in range(1, 10)}
 MONEY_DECISIONS = COMMON_DECISIONS | {"W1_D10", "W1_D11"}
+GLOBAL_DECISIONS = {f"GFC_D{number}" for number in range(1, 5)}
 MONEY_RETIRED = {"CN.LOANS.RMB.FLOW", "CN.LOANS.CORP.MEDIUM_LONG.FLOW"}
 
 
@@ -20,13 +21,24 @@ def validate_contracts(contract_root: Path, registry_path: Path) -> dict[str, ob
     package_counts = Counter()
     contract_series: list[str] = []
     checks = {
-        "five_contracts": len(contracts) == 5,
+        "six_contracts": len(contracts) == 6,
         "package_ids_exact": {item["package_id"] for item in contracts} == set(EXPECTED),
         "all_schema_v2": all(item["schema_version"] == 2 for item in contracts),
-        "all_gold_decided": all(item["status"].startswith("GOLD_") for item in contracts),
+        "all_states_expected": all(
+            item["status"].startswith("GOLD_")
+            if item["package_id"] != "global_financial_conditions"
+            else item["status"] == "CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED"
+            for item in contracts
+        ),
         "all_decisions_frozen": all(
             set(item["accepted_decisions"])
-            == (MONEY_DECISIONS if item["package_id"] == "money_credit" else COMMON_DECISIONS)
+            == (
+                MONEY_DECISIONS
+                if item["package_id"] == "money_credit"
+                else GLOBAL_DECISIONS
+                if item["package_id"] == "global_financial_conditions"
+                else COMMON_DECISIONS
+            )
             for item in contracts
         ),
         "source_whitelists_registered": all(set(item["source_whitelist"]).issubset(sources) for item in contracts),

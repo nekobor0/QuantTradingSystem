@@ -3,7 +3,7 @@
   "status": "DECISIONS_CONFIRMED",
   "as_of": "2026-08-29",
   "parent_universe": "development/18-macro-data-layer/R011_macro_data_prioritization/02_china_macro_data_universe_v0.1.yaml",
-  "series_count": 35,
+  "series_count": 44,
   "policies": {
     "official_source_precedence": true,
     "existing_tushare_role": "independent_crosscheck_only",
@@ -15,12 +15,12 @@
     "rates_shadow_only_before_sol_review": true
   },
   "inventory_summary": {
-    "w1_series_total": 35,
+    "w1_series_total": 44,
     "formal_v1_series": ["CN.SHIBOR.ON", "CN.SHIBOR.1W", "CN.SHIBOR.3M", "CN.PMI.MFG.HEADLINE", "CN.PMI.MFG.NEW_ORDERS"],
     "official_event_history_research_blocked": ["CN.PBOC.OMO.REVERSE_REPO.7D.RATE", "CN.PBOC.MLF.1Y.RATE"],
     "shadow_blocked": ["CN.REPO.DR007", "CN.REPO.R007"],
     "existing_crosscheck_only_count": 12,
-    "not_formally_implemented_count": 30,
+    "not_formally_implemented_count": 39,
     "canonical_v2_available": true,
     "evidence": {
       "sample_registry": "config/macro_sample_registry.json",
@@ -33,7 +33,8 @@
     {"package_id":"pmi_state","order":2,"series_count":8,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"TWO_IMPLEMENTED_SIX_EXISTING_CROSSCHECK_FIELDS_MAPPED"},
     {"package_id":"prices","order":3,"series_count":5,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_CROSSCHECK_MAPPED"},
     {"package_id":"money_credit","order":4,"series_count":8,"active_required_series_count":6,"retired_series_count":2,"primary_sources":["PBOC_STATS"],"sample_state":"ACTIVE_GOLD_6_OF_6_TWO_UNOBSERVABLE_LEGACY_DEFINITIONS_RETIRED"},
-    {"package_id":"growth_output","order":5,"series_count":3,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_GDP_CROSSCHECK_MAPPED"}
+    {"package_id":"growth_output","order":5,"series_count":3,"primary_sources":["NBS_RELEASE","NBS_DATA"],"sample_state":"OFFICIAL_RELEASE_SHAPE_PROBED_EXISTING_GDP_CROSSCHECK_MAPPED"},
+    {"package_id":"global_financial_conditions","order":6,"series_count":9,"primary_sources":["NYFED_MARKETS","US_TREASURY","FEDERAL_RESERVE_H10","CFETS_CHINAMONEY"],"sample_state":"CONTRACT_FROZEN_OFFICIAL_EVIDENCE_NOT_ACQUIRED"}
   ],
   "sources": {
     "NBS_RELEASE":{"url":"https://www.stats.gov.cn/sj/zxfb/","authority":"official","acquisition":"html_release_and_attachment","release_evidence":"printed_page_timestamp","probe":"reachable","pit_grade":"A"},
@@ -41,7 +42,10 @@
     "PBOC_STATS":{"url":"https://www.pbc.gov.cn/diaochatongjisi/116219/116319/index.html","authority":"official","acquisition":"release_html_xls_pdf","release_evidence":"printed_page_timestamp","probe":"reachable_heterogeneous_attachments","pit_grade":"A"},
     "PBOC_POLICY":{"url":"https://www.pbc.gov.cn/zhengcehuobisi/125207/125213/index.html","authority":"official","acquisition":"event_release_html","release_evidence":"printed_page_timestamp","probe":"reachable","pit_grade":"A"},
     "CFETS_CHINAMONEY":{"url":"https://www.chinamoney.com.cn/","authority":"official_market_infrastructure","acquisition":"structured_query_html_download","release_evidence":"product_specific","probe":"shibor_implemented_other_products_need_contract_confirmation","pit_grade":"A_B"},
-    "CHINABOND":{"url":"https://yield.chinabond.com.cn/cbweb-mn/pgxh/showHistory","authority":"official_market_infrastructure","acquisition":"structured_query_annual_download","release_evidence":"daily_close_without_observed_latency","probe":"reachable_one_year_query_windows","pit_grade":"B"}
+    "CHINABOND":{"url":"https://yield.chinabond.com.cn/cbweb-mn/pgxh/showHistory","authority":"official_market_infrastructure","acquisition":"structured_query_annual_download","release_evidence":"daily_close_without_observed_latency","probe":"reachable_one_year_query_windows","pit_grade":"B"},
+    "NYFED_MARKETS":{"url":"https://www.newyorkfed.org/markets/reference-rates","authority":"official_central_bank","acquisition":"official_markets_data_api","release_evidence":"published_schedule_and_same_day_revision_policy","probe":"contract_only_not_acquired","pit_grade":"A_C"},
+    "US_TREASURY":{"url":"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/","authority":"official_government","acquisition":"official_xml_csv_feed","release_evidence":"usually_by_1800_et_with_possible_delay","probe":"contract_only_not_acquired","pit_grade":"A_C"},
+    "FEDERAL_RESERVE_H10":{"url":"https://www.federalreserve.gov/releases/h10/summary/","authority":"official_central_bank","acquisition":"official_h10_xml_csv","release_evidence":"release_vintage_required","probe":"contract_only_not_acquired","pit_grade":"C_pending_vintages"}
   },
   "series": [
     {"id":"shibor_on","canonical_id":"CN.SHIBOR.ON","package":"rates_liquidity","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"percent_per_annum","existing":"shibor.parquet:on","state":"IMPLEMENTED"},
@@ -78,9 +82,18 @@
     {"id":"tsf_rmb_loan_flow","canonical_id":"CN.TSF.RMB_LOANS.FLOW","package":"money_credit","source":"PBOC_STATS","frequency":"monthly","unit":"100m_cny","existing":null,"state":"GOLD_CANDIDATE_AUTHORIZED_SEMANTICALLY_DISTINCT"},
     {"id":"gdp_nominal","canonical_id":"CN.GDP.NOMINAL.YTD","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"100m_cny","existing":"cn_gdp.parquet:gdp","state":"FIELD_MAPPED_DEFINITION_GATE"},
     {"id":"gdp_real_yoy","canonical_id":"CN.GDP.REAL.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"quarterly","unit":"percent_yoy","existing":"cn_gdp.parquet:gdp_yoy","state":"FIELD_MAPPED"},
-    {"id":"industrial_va_yoy","canonical_id":"CN.INDUSTRIAL.VA.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"monthly_with_jan_feb_joint","unit":"percent_yoy","existing":null,"state":"NEEDS_ADAPTER_PERIOD_SPAN_GATE"}
+    {"id":"industrial_va_yoy","canonical_id":"CN.INDUSTRIAL.VA.YOY","package":"growth_output","source":"NBS_RELEASE","frequency":"monthly_with_jan_feb_joint","unit":"percent_yoy","existing":null,"state":"NEEDS_ADAPTER_PERIOD_SPAN_GATE"},
+    {"id":"us_effr","canonical_id":"US.EFFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"us_sofr","canonical_id":"US.SOFR","package":"global_financial_conditions","source":"NYFED_MARKETS","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"us_treasury_3m","canonical_id":"US.TREASURY.3M","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"us_treasury_2y","canonical_id":"US.TREASURY.2Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"us_treasury_10y","canonical_id":"US.TREASURY.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"us_tips_real_10y","canonical_id":"US.TIPS.REAL.10Y","package":"global_financial_conditions","source":"US_TREASURY","frequency":"business_daily","unit":"percent_per_annum_real","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"us_broad_dollar","canonical_id":"US.BROAD_DOLLAR","package":"global_financial_conditions","source":"FEDERAL_RESERVE_H10","frequency":"business_daily","unit":"index_2006_100","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"usd_cny","canonical_id":"USD.CNY","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cny_per_usd","existing":null,"state":"CONTRACT_ONLY"},
+    {"id":"usd_cnh","canonical_id":"USD.CNH","package":"global_financial_conditions","source":"CFETS_CHINAMONEY","frequency":"business_daily","unit":"cnh_per_usd","existing":null,"state":"SOURCE_AND_ENTITLEMENT_BLOCKED"}
   ],
-  "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10", "W1_D11"],
+  "confirmed_decision_ids": ["W1_D1", "W1_D2", "W1_D3", "W1_D4", "W1_D5", "W1_D6", "W1_D7", "W1_D8", "W1_D9", "W1_D10", "W1_D11", "GFC_D1", "GFC_D2", "GFC_D3", "GFC_D4"],
   "confirmation_decisions": [
     {"id":"W1_D1","topic":"amount_units","recommended":"store official 100m_cny for GDP, money and flow series; derive trillion_cny only in feature layer"},
     {"id":"W1_D2","topic":"gdp_nominal_grain","recommended":"canonical official YTD cumulative value plus separately derived single-quarter value; never label YTD as quarter-only"},
@@ -92,6 +105,10 @@
     {"id":"W1_D8","topic":"historical_pit","recommended":"official current history without contemporaneous release evidence is exploratory_only; research-ready windows start where release-page vintages are reconstructed"},
     {"id":"W1_D9","topic":"chinabond_usage","recommended":"internal research only, retain terms/version evidence, query in at-most-one-year windows, no raw redistribution"},
     {"id":"W1_D10","topic":"money_credit_afre_semantic_separation","recommended":"add CN.TSF.RMB_LOANS.FLOW for the direct monthly AFRE loans-to-real-economy component; never alias it to CN.LOANS.RMB.FLOW; cumulative and balance differencing remain forbidden"},
-    {"id":"W1_D11","topic":"money_credit_active_canonical_scope","recommended":"retire CN.LOANS.RMB.FLOW and CN.LOANS.CORP.MEDIUM_LONG.FLOW from the W1 active-required raw canonical set because no direct official single-month observations passed the frozen evidence policy; retain tombstones, forbid AFRE aliasing, and require any future derived flow to use a new method-versioned derived series"}
+    {"id":"W1_D11","topic":"money_credit_active_canonical_scope","recommended":"retire CN.LOANS.RMB.FLOW and CN.LOANS.CORP.MEDIUM_LONG.FLOW from the W1 active-required raw canonical set because no direct official single-month observations passed the frozen evidence policy; retain tombstones, forbid AFRE aliasing, and require any future derived flow to use a new method-versioned derived series"},
+    {"id":"GFC_D1","topic":"independent_package_boundary","recommended":"global_financial_conditions is independent from China rates_liquidity and is decomposed into DomesticLiquidity, GlobalUSDConditions, and FXConstraint"},
+    {"id":"GFC_D2","topic":"official_source_precedence","recommended":"use New York Fed, US Treasury, Federal Reserve H10, and CFETS official observations; adapters and aggregators are transport only and never replace raw official evidence"},
+    {"id":"GFC_D3","topic":"cross_market_pit","recommended":"store reference, release, available, and tradable timestamps separately in UTC; never use a US observation in a China decision before its tradable timestamp"},
+    {"id":"GFC_D4","topic":"fx_semantic_boundary","recommended":"USD.CNY is the CFETS 16:30 onshore spot close; USD.CNH requires a matched-timestamp official offshore source and may not be proxied by CNY or third-party series"}
   ]
 }

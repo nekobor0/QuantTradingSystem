@@ -12,6 +12,7 @@ EXPECTED_PACKAGES = {
     "prices": 5,
     "money_credit": 8,
     "growth_output": 3,
+    "global_financial_conditions": 9,
 }
 
 
@@ -30,14 +31,14 @@ def validate_inventory(path: Path) -> dict[str, object]:
     )
     checks = {
         "version_2": registry["version"] == 2,
-        "series_35": len(series) == 35,
+        "series_44": len(series) == 44,
         "ids_unique": len(ids) == len(set(ids)),
         "canonical_ids_unique": len(canonical_ids) == len(set(canonical_ids)),
         "package_counts_exact": dict(package_counts) == EXPECTED_PACKAGES,
         "summary_total_exact": summary["w1_series_total"] == len(series),
         "formal_count_5": len(summary["formal_v1_series"]) == 5,
         "advanced_series_registered": advanced.issubset(canonical_ids),
-        "not_formally_implemented_30": summary["not_formally_implemented_count"] == 30,
+        "not_formally_implemented_39": summary["not_formally_implemented_count"] == 39,
         "canonical_v2_available": summary["canonical_v2_available"] is True,
     }
     failures = sorted(name for name, passed in checks.items() if not passed)

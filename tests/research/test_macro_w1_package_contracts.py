@@ -9,7 +9,7 @@ from scripts.data_lake.validate_macro_w1_package_contracts import validate_contr
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_five_package_contracts_cover_w1_exactly_once() -> None:
+def test_six_package_contracts_cover_w1_exactly_once() -> None:
     result = validate_contracts(
         ROOT / "config" / "macro_w1_packages",
         ROOT / "config" / "macro_w1_confirmation_registry.json",
@@ -21,6 +21,7 @@ def test_five_package_contracts_cover_w1_exactly_once() -> None:
         "prices": 5,
         "money_credit": 8,
         "growth_output": 3,
+        "global_financial_conditions": 9,
     }
 
 
